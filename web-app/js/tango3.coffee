@@ -15,7 +15,7 @@ test = ->
 
     constructor: ->
       @lines = []
-      for i in [0...20]
+      for i in [0...50]
         @lines.push "Line no #{i}"
 
     size: ->
@@ -55,6 +55,7 @@ class WindowHandler
   editLine: (index, position = -1) ->
     div = @lineDivs[index]
     div.attr('contentEditable', yes)
+    div.focus()
 
   renderLine: (index, prepend = no) ->
     line = @provider.get(index)
@@ -66,7 +67,7 @@ class WindowHandler
       @lines.append(div)
       @lineDivs.push(div)
     div.text(line)
-    div.on 'mousedown', =>
+    div.on 'click', =>
       @editLine(index)
     div.on 'blur', =>
       div.text(div.text())
