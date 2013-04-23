@@ -1,0 +1,22 @@
+{
+  "name": "Tango3",
+  "description": "Tango3",
+  "version": "1.0.0",
+  "manifest_version": 2,
+  "app": {
+    "launch": {
+      "local_path": "tango3.html"
+    }
+  },
+  "icons": {
+    "128": "img/logo_128.png",
+    "48": "img/logo_48.png",
+    "16": "img/logo_16.png"
+  },
+  "permissions": [
+    "unlimitedStorage",
+    "<all_urls>",
+    "idle",
+    "notifications"
+  ]
+}
