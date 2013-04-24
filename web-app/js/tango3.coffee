@@ -1,5 +1,5 @@
 yepnope({
-  load: ['lib/zepto.min.js','css/tango3.css'],
+  load: ['lib/zepto.min.js', 'lib/zepto/touch.js', 'css/tango3.css'],
   complete: ->
     $(document).ready ->
       test()
@@ -16,7 +16,7 @@ test = ->
     constructor: ->
       @lines = []
       for i in [0...50]
-        @lines.push "Line\tno #{i}"
+        @lines.push "Line no #{i}"
 
     size: ->
       return @lines.length
@@ -27,6 +27,9 @@ test = ->
     editable: (index, column) ->
       yes
 
+    edit: (index, text) ->
+      @lines[index] = text
+
   provider = new TestProvider()
   win = new WindowHandler()
   div = $(document.createElement('div')).attr('id', 'testWin')
@@ -35,7 +38,7 @@ test = ->
   log 'Win created'
   setTimeout ->
     win.refresh()
-  , 0
+  , 100
 
 class WindowProvider
 
@@ -47,6 +50,12 @@ class WindowProvider
   
   editable: (index, column) ->
     no
+
+  edit: (index, text) ->
+
+  add: (index, text) ->
+
+  remove: (index) ->
 
 class WindowHandler
 
@@ -60,6 +69,12 @@ class WindowHandler
     @char = $(document.createElement('div')).addClass('win char hidden').appendTo(div)
     @char.text('0')
     @lineDivs = []
+    @lines.on 'swipeUp', =>
+      @pg(@selected-@from, no)
+      return no
+    @lines.on 'swipeDown ', =>
+      @pg(@selected-@from, yes)
+      return no
     return div
 
   moveCursor: (div, text, pos) ->
@@ -74,18 +89,19 @@ class WindowHandler
     selection.removeAllRanges()
     selection.addRange(range)
 
-  editLine: (index, position = -1) ->
+  editLine: (index, reason) ->
+    log 'editLine', index, reason
     div = @lineDivs[index]
     div.addClass('line_edit')
-    div.focus()
     @selected = @from+index
-    if @provider.editable(@selected, position)
+    if @provider.editable(@selected, @cursorRow)
       text = @provider.get(@selected)
       div.text(text)
       @edit = yes
       div.attr('contentEditable', yes)
       if @cursorRow>=0
         @moveCursor(div.get(0), text, @cursorRow)
+    div.focus()
 
   cursorPos: (div) ->
     # log 'Sel:', window.getSelection(), window.getSelection().rangeCount
@@ -101,7 +117,7 @@ class WindowHandler
     while treeWalker.nextNode()
       charCount = charCount + treeWalker.currentNode.length
     if range.startContainer.nodeType is 3
-      charCount = charCount + range.startOffset
+      charCount = range.startOffset
     return charCount
 
   finishEdit: (index, reason = 'none') ->
@@ -113,6 +129,7 @@ class WindowHandler
     div.removeClass('line_edit')
     if @edit
       text = div.text()
+      @provider.edit(@from+index, text)
       div.text(text)
       div.attr('contentEditable', no)
     @edit = no
@@ -133,10 +150,12 @@ class WindowHandler
     @lineDivs.push(div)
     div.on 'click', =>
       selIndex = @selected-@from
+      log 'click', index, selIndex, @selected, @from
       if selIndex isnt index
         @finishEdit(selIndex, 'before click')
         @cursorRow = @cursorPos div
-        @editLine(index)
+        @editLine(index, 'click')
+      return yes
     div.on 'keydown', (e) =>
       if e.keyCode is 13
         return no
@@ -176,8 +195,8 @@ class WindowHandler
 
   pg: (index, up = no) ->
     #Scrolls page up or down
-    if up then @from = @from - @pgScrollSize() else @from = @from + @pgScrollSize()
     @finishEdit(index)
+    if up then @from = @from - @pgScrollSize() else @from = @from + @pgScrollSize()
     @display()
 
   display: (show_cursor = no) ->
@@ -195,15 +214,16 @@ class WindowHandler
       # Render line
       @renderLine(@from+i, i)
       if @from+i is @selected
-        @editLine(i)
+        @editLine(i, 'display')
 
   refresh: () ->
     @rows = Math.floor(@lines.height()/@char.height())
     @cols = Math.floor(@lines.width()/@char.width())
-    if rows is 0 then rows = 1
-    if cols is 0 then cols = 1
+    if @rows is 0 then @rows = 1
+    if @cols is 0 then @cols = 1
     @lineDivs = []
+    log 'Refresh', @rows, @cols, @lines.width(), @lines.height()
     for i in [0...@rows]
       @createLine(i)
     @display()
-    if @selected is -1 then @editLine(0)
+    if @selected is -1 then @editLine(0, 'refresh')
