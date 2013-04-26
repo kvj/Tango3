@@ -18,6 +18,15 @@ test = ->
       for i in [0...50]
         @lines.push "Line no #{i}"
 
+    colorize: (index) ->
+      result = []
+      text = @get(index)
+      if text.indexOf('no') != -1
+        result.push([text.indexOf('no'), 2, 'text0'])
+      if text.indexOf('xxx') != -1
+        result.push([text.indexOf('xxx'), 3, 'text1'])
+      return result
+
     size: ->
       return @lines.length
 
@@ -29,6 +38,20 @@ test = ->
 
     edit: (index, text) ->
       @lines[index] = text
+
+    lineBreak: (index, text, pos) ->
+      @lines[index] = text.substr(0, pos)
+      @lines.splice(index+1, 0, text.substr(pos))
+      [index+1, 0]
+
+    backSpace: (index, text) ->
+      if index is 0
+        # First line
+        return [0, 0]
+      prevLength = @lines[index-1].length
+      @lines[index-1] = @lines[index-1]+text
+      @lines.splice(index, 1)
+      [index-1, prevLength]
 
   provider = new TestProvider()
   win = new WindowHandler()
@@ -53,9 +76,14 @@ class WindowProvider
 
   edit: (index, text) ->
 
-  add: (index, text) ->
+  lineBreak: (index, text, pos) ->
+    [index, pos]
 
-  remove: (index) ->
+  backSpace: (index, text) ->
+    [index, 0]
+
+  colorize: (index) ->
+    []
 
 class WindowHandler
 
@@ -89,8 +117,50 @@ class WindowHandler
     selection.removeAllRanges()
     selection.addRange(range)
 
+  colorize: (div, text, spans) ->
+    res = [[0, text.length]] # Start point
+    for span in spans
+      if span[0]>=0 and span[1]>0 and span[0]+span[1]<=text.length
+        # Correct bounds 1, 1 = 2
+        for item, i in res
+          if item[0]+item[1] <= span[0]
+            # Skip all spans at left
+            continue
+          if item[0]<span[0] and item[0]+item[1]>span[0]+span[1]
+            # Inside
+            ritem = [span[0]+span[1]]
+            ritem[1] = item[0]+item[1]-ritem[0]
+            ritem[2] = item[2]
+            item[1] = span[0]-item[0]
+            res.splice(i+1, 0, span, ritem)
+            break
+          if item[0]>=span[0] and item[0]+item[1]<=span[0]+span[1]
+            # Inside - opposite
+            res.splice(i, 1)
+            i = i-1
+            continue
+          if item[0]>=span[0]
+            # span - item
+            res.splice(i, 0, span)
+            end = item[0]+item[1]
+            item[0] = span[0]+span[1]
+            item[1] = end - item[0]
+          else
+            # item - span
+            item[1] = span[0] - item[0]
+            res.splice(i+1, 0, span)
+          i = i+1
+    div.empty()
+    for item in res
+      span = $(document.createElement('span'))
+      span.text(text.substr(item[0], item[1]))
+      if item[2]
+        # Have theme
+        span.addClass('th_'+item[2])
+      div.append(span)
+
   editLine: (index, reason) ->
-    log 'editLine', index, reason
+    # log 'editLine', index, reason
     div = @lineDivs[index]
     div.addClass('line_edit')
     @selected = @from+index
@@ -123,15 +193,15 @@ class WindowHandler
   finishEdit: (index, reason = 'none') ->
     div = @lineDivs[index]
     pos = @cursorPos(div)
-    log 'finishEdit', pos, @edit, index, reason
+    # log 'finishEdit', pos, @edit, index, reason
     if @edit and pos>= 0
       @cursorRow = pos
     div.removeClass('line_edit')
     if @edit
       text = div.text()
       @provider.edit(@from+index, text)
-      div.text(text)
       div.attr('contentEditable', no)
+      @renderLine(@from+index, index)
     @edit = no
 
   renderLine: (index, lineIndex) ->
@@ -139,9 +209,23 @@ class WindowHandler
     div.attr('class', 'win char line')
     if index<@provider.size()
       text = @provider.get(index)
-      div.text(text)
+      colors = @provider.colorize(index)
+      @colorize(div, text, colors)
     else
       div.text('')
+
+  backSpace: (index) ->
+    div = @lineDivs[index]
+    text = div.text()
+    [@selected, @cursorRow] = @provider.backSpace(@from+index, text)
+    @display(yes)
+
+  insertBreak: (index) ->
+    div = @lineDivs[index]
+    pos = @cursorPos(div)
+    text = div.text()
+    [@selected, @cursorRow] = @provider.lineBreak(@from+index, text, pos)
+    @display(yes)
 
   createLine: (index) ->
     div = $(document.createElement('div'))
@@ -149,16 +233,20 @@ class WindowHandler
     @lines.append(div)
     @lineDivs.push(div)
     div.on 'click', =>
-      selIndex = @selected-@from
-      log 'click', index, selIndex, @selected, @from
-      if selIndex isnt index
-        @finishEdit(selIndex, 'before click')
-        @cursorRow = @cursorPos div
-        @editLine(index, 'click')
+      log 'click', index, @from, @selected
+      if @edit and @selected isnt @from+index
+        @finishEdit(@selected-@from, 'before click')
+      @cursorRow = @cursorPos div
+      @editLine(index, 'click')
       return yes
     div.on 'keydown', (e) =>
       if e.keyCode is 13
+        @insertBreak(index)
         return no
+      if e.keyCode is 8
+        if @cursorPos(div) is 0
+          @backSpace(index)
+          return no
       if e.keyCode is 33
         @pg(index, yes)
         return no
@@ -169,7 +257,7 @@ class WindowHandler
         return @cursor(index, 'up')
       if e.keyCode is 40
         return @cursor(index, 'down')
-      log 'Key', e.keyCode
+      # log 'Key', e.keyCode
 
   pgScrollSize: ->
     # Returns number of page to scroll

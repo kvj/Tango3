@@ -45,6 +45,7 @@ body {
 .win.char {
 	font-family: Consolas, Monospace;
 	font-size: 1em;
+	min-height: 1.25em;
 }
 
 .win.char.hidden {
@@ -62,4 +63,21 @@ body {
 
 .win.line_edit {
 	background-color: #dddddd;
+}
+
+.win > .th_text0 {
+	color: #222288;
+}
+
+.win > .th_text1 {
+	color: #228822;
+}
+
+.win > .th_text2 {
+	color: #882222;
+}
+
+.win > .th_select0 {
+	color: #ffffff;
+	background-color: #222255;
 }
