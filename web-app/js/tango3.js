@@ -79,6 +79,7 @@
         var prevLength;
 
         if (index === 0) {
+          this.lines[index] = text;
           return [0, 0];
         }
         prevLength = this.lines[index - 1].length;
@@ -145,6 +146,7 @@
       this.from = 0;
       this.selected = -1;
       this.cursorRow = 0;
+      this.selection = null;
       div = $(document.createElement('div')).addClass('win root');
       this.lines = $(document.createElement('div')).addClass('win lines').appendTo(div);
       this.scroll = $(document.createElement('div')).addClass('win scroll').appendTo(div);
@@ -179,15 +181,20 @@
     };
 
     WindowHandler.prototype.colorize = function(div, text, spans) {
-      var end, i, item, res, ritem, span, _i, _j, _k, _len, _len1, _len2, _results;
+      var end, i, item, res, ritem, span, _i, _j, _len, _len1, _results;
 
       res = [[0, text.length]];
       for (_i = 0, _len = spans.length; _i < _len; _i++) {
         span = spans[_i];
         if (span[0] >= 0 && span[1] > 0 && span[0] + span[1] <= text.length) {
-          for (i = _j = 0, _len1 = res.length; _j < _len1; i = ++_j) {
+          i = 0;
+          while (i < res.length) {
             item = res[i];
+            if (item[0] >= span[0] + span[1]) {
+              break;
+            }
             if (item[0] + item[1] <= span[0]) {
+              i++;
               continue;
             }
             if (item[0] < span[0] && item[0] + item[1] > span[0] + span[1]) {
@@ -196,11 +203,15 @@
               ritem[2] = item[2];
               item[1] = span[0] - item[0];
               res.splice(i + 1, 0, span, ritem);
+              i++;
               break;
             }
             if (item[0] >= span[0] && item[0] + item[1] <= span[0] + span[1]) {
               res.splice(i, 1);
-              i = i - 1;
+              if (item[0] + item[1] === span[0] + span[1]) {
+                res.splice(i, 0, span);
+                i++;
+              }
               continue;
             }
             if (item[0] >= span[0]) {
@@ -212,14 +223,14 @@
               item[1] = span[0] - item[0];
               res.splice(i + 1, 0, span);
             }
-            i = i + 1;
+            i += 2;
           }
         }
       }
       div.empty();
       _results = [];
-      for (_k = 0, _len2 = res.length; _k < _len2; _k++) {
-        item = res[_k];
+      for (_j = 0, _len1 = res.length; _j < _len1; _j++) {
+        item = res[_j];
         span = $(document.createElement('span'));
         span.text(text.substr(item[0], item[1]));
         if (item[2]) {
@@ -233,17 +244,20 @@
     WindowHandler.prototype.editLine = function(index, reason) {
       var div, text;
 
+      if (index + this.from >= this.provider.size()) {
+        return false;
+      }
       div = this.lineDivs[index];
       div.addClass('line_edit');
       this.selected = this.from + index;
-      if (this.provider.editable(this.selected, this.cursorRow)) {
+      if (this.provider.editable(this.selected, this.cursorRow) && !this.selection) {
         text = this.provider.get(this.selected);
         div.text(text);
         this.edit = true;
         div.attr('contentEditable', true);
-        if (this.cursorRow >= 0) {
-          this.moveCursor(div.get(0), text, this.cursorRow);
-        }
+      }
+      if (this.cursorRow >= 0 && text) {
+        this.moveCursor(div.get(0), text, this.cursorRow);
       }
       return div.focus();
     };
@@ -268,10 +282,10 @@
       }, false);
       charCount = 0;
       while (treeWalker.nextNode()) {
-        charCount = charCount + treeWalker.currentNode.length;
+        charCount += treeWalker.currentNode.length;
       }
       if (range.startContainer.nodeType === 3) {
-        charCount = range.startOffset;
+        charCount += range.startOffset;
       }
       return charCount;
     };
@@ -297,14 +311,46 @@
       return this.edit = false;
     };
 
+    WindowHandler.prototype.normalizeRange = function(range) {
+      if (range[0] < range[2]) {
+        return range;
+      }
+      if (range[0] > range[2] || range[1] < range[3]) {
+        return [range[2], range[3], range[0], range[1]];
+      }
+      return range;
+    };
+
     WindowHandler.prototype.renderLine = function(index, lineIndex) {
-      var colors, div, text;
+      var colors, div, range, sel, text, _i, _len, _ref;
 
       div = this.lineDivs[lineIndex];
       div.attr('class', 'win char line');
       if (index < this.provider.size()) {
         text = this.provider.get(index);
         colors = this.provider.colorize(index);
+        if (this.selection) {
+          _ref = this.selection;
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            sel = _ref[_i];
+            range = this.normalizeRange(sel);
+            log('render', range, index, text);
+            if (index > range[0] && index < range[2]) {
+              colors.push([0, text.length, 'select0']);
+            }
+            if (index === range[0]) {
+              if (index === range[2]) {
+                colors.push([range[1], range[3] - range[1], 'select0']);
+              } else {
+                colors.push([range[1], text.length - range[1], 'select0']);
+              }
+            } else {
+              if (index === range[2]) {
+                colors.push([0, range[3], 'select0']);
+              }
+            }
+          }
+        }
         return this.colorize(div, text, colors);
       } else {
         return div.text('');
@@ -339,23 +385,33 @@
       this.lines.append(div);
       this.lineDivs.push(div);
       div.on('click', function() {
-        log('click', index, _this.from, _this.selected);
-        if (_this.edit && _this.selected !== _this.from + index) {
+        var row;
+
+        log('click', _this.from + index, _this.selected, _this.cursorRow);
+        row = _this.cursorPos(div);
+        if (_this.selected !== _this.from + index) {
+          log('Cursor pos:', row);
           _this.finishEdit(_this.selected - _this.from, 'before click');
+          _this.cursorRow = row;
+          _this.editLine(index, 'click');
         }
-        _this.cursorRow = _this.cursorPos(div);
-        _this.editLine(index, 'click');
         return true;
       });
       return div.on('keydown', function(e) {
-        if (e.keyCode === 13) {
-          _this.insertBreak(index);
-          return false;
-        }
-        if (e.keyCode === 8) {
-          if (_this.cursorPos(div) === 0) {
-            _this.backSpace(index);
-            return false;
+        var _ref;
+
+        if (e.shiftKey && ((_ref = e.keyCode) === 33 || _ref === 34 || _ref === 37 || _ref === 38 || _ref === 39 || _ref === 40)) {
+          if (!_this.selection) {
+            _this.selection = [[_this.selected, _this.cursorPos(div)]];
+          }
+          if (_this.edit) {
+            _this.finishEdit(index);
+          }
+        } else {
+          if (_this.selection) {
+            _this.selection = null;
+            _this.editLine(index, 'reset selection');
+            _this.display(true);
           }
         }
         if (e.keyCode === 33) {
@@ -372,6 +428,22 @@
         if (e.keyCode === 40) {
           return _this.cursor(index, 'down');
         }
+        if (e.keyCode === 37) {
+          return _this.cursor(index, 'left');
+        }
+        if (e.keyCode === 39) {
+          return _this.cursor(index, 'right');
+        }
+        if (e.keyCode === 13) {
+          _this.insertBreak(index);
+          return false;
+        }
+        if (e.keyCode === 8) {
+          if (_this.cursorPos(div) === 0) {
+            _this.backSpace(index);
+            return false;
+          }
+        }
       });
     };
 
@@ -386,21 +458,52 @@
     };
 
     WindowHandler.prototype.cursor = function(index, dir) {
+      var div, pos;
+
+      div = this.lineDivs[index];
       if (dir === 'up') {
+        this.finishEdit(index, 'cursor up');
         if (this.selected > 0) {
-          this.finishEdit(index, 'cursor up');
           this.selected = this.selected - 1;
         }
         this.display(true);
         return false;
       }
       if (dir === 'down') {
+        this.finishEdit(index, 'cursor down');
         if (this.selected < this.provider.size() - 1) {
-          this.finishEdit(index, 'cursor down');
           this.selected = this.selected + 1;
         }
         this.display(true);
         return false;
+      }
+      if (dir === 'left') {
+        pos = this.cursorPos(div);
+        if (pos === 0 && this.selected > 0) {
+          this.selected--;
+          this.cursorRow = this.provider.get(this.selected).length;
+          this.display(true);
+          return false;
+        }
+        if (this.selection) {
+          this.cursorRow = pos - 1;
+          this.display(true);
+          return false;
+        }
+      }
+      if (dir === 'right') {
+        pos = this.cursorPos(div);
+        if (pos === div.text().length && this.selected < this.provider.size() - 1) {
+          this.selected++;
+          this.cursorRow = 0;
+          this.display(true);
+          return false;
+        }
+        if (this.selection) {
+          this.cursorRow = pos + 1;
+          this.display(true);
+          return false;
+        }
       }
       return true;
     };
@@ -410,12 +513,22 @@
         up = false;
       }
       this.finishEdit(index);
+      this.selected = -1;
       if (up) {
-        this.from = this.from - this.pgScrollSize();
+        if (this.from === 0) {
+          index = 0;
+        } else {
+          this.from = this.from - this.pgScrollSize();
+        }
       } else {
-        this.from = this.from + this.pgScrollSize();
+        if (this.from + this.rows >= this.provider.size()) {
+          index = this.rows - 1 - (this.from + this.rows - this.provider.size());
+        } else {
+          this.from = this.from + this.pgScrollSize();
+        }
       }
-      return this.display();
+      this.display();
+      return this.editLine(index, 'pg');
     };
 
     WindowHandler.prototype.display = function(show_cursor) {
@@ -424,6 +537,11 @@
 
       if (show_cursor == null) {
         show_cursor = false;
+      }
+      if (this.selection) {
+        this.selection[0][2] = this.selected;
+        this.selection[0][3] = this.cursorRow;
+        this.edit = false;
       }
       size = this.provider.size();
       normFrom = function() {
