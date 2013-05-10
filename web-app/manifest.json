@@ -5,7 +5,7 @@
   "manifest_version": 2,
   "app": {
     "launch": {
-      "local_path": "tango3.html"
+      "local_path": "tango2.html"
     }
   },
   "icons": {
