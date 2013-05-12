@@ -105,9 +105,17 @@ IndexedDB.prototype.execTransaction = function(t, handler) {
         handler(null, e.target.result);
     };
     t.onerror = function(e) {
-        $$.log('execTransaction', e);
+        $$.log('execTransaction Error', e);
         handler({message: 'Error: '+e.target.error.name});
     };
+};
+
+IndexedDB.prototype.cancelTransaction = function(t) {
+    t.oncomplete = t.onerror = null;
+};
+
+IndexedDB.prototype.cancelRequest = function(t) {
+    t.onsuccess = t.onerror = null;
 };
 
 var $$ = {};
@@ -132,6 +140,190 @@ ConnectionsDB.prototype.upgrade = function(db, transaction, version) {
         var store = transaction.objectStore('connections');
         store.createIndex('code', 'code', {unique: true});
         return;
+    }
+};
+
+var DocumentsDB = function () {
+};
+DocumentsDB.prototype = new IndexedDB();
+
+DocumentsDB.prototype.upgrade = function(db, t, version) {
+    // config.upgrade will receive version 1, 2, 3 excluding own upgrades
+    var configUpgrade = function (version) {
+        if (this.appConfig.upgrade) {
+            this.appConfig.upgrade(db, t, version);
+        };
+    }.bind(this);
+    var ownUpgrade = function () {
+        switch (version) {
+        case 1:
+            var history = db.createObjectStore('history', {keyPath: 'id'});
+            history.createIndex('version', 'version', {unique: true});
+            history.createIndex('tstamp', 'tstamp');
+            var documents = db.createObjectStore('documents', {keyPath: 'id'});
+            documents.createIndex('conn', 'conn');
+            return;
+        }
+    };
+    // 1 2 3 4 5
+    // X     X
+    var own = [1];
+    for (var i = 0; i < own.length; i++) {
+        if (version == own[i]) {
+            return ownUpgrade();
+        };
+        if (version<own[i]) {
+            return configUpgrade(version-i+1);
+        };
+    };
+    return configUpgrade(version-own.length);
+};
+
+var DocumentsManager = function (conn, handler, config) {
+    this.conn = conn;
+    this.config = config || {};
+    this._id = 0;
+    var ownVersion = 1;
+    var db = new DocumentsDB();
+    db.appConfig = this.config;
+    db.open('db_'+conn.code, ownVersion + (this.config.version || 0), function(err) {
+        if (!err) {
+            this.db = db;
+        };
+        return handler(err);
+    }.bind(this));
+};
+
+DocumentsManager.prototype.id = function() {
+    var id = new Date().getTime();
+    while (id <= this._id) {
+        id = this._id+1;
+    }
+    this._id = id;
+    return id;
+};
+
+DocumentsManager.prototype.beforeEdit = function(type, doc, handler) {
+    // Checks if it's OK to edit
+    // var cb = handler || function () {};
+    // if (!this.conn.marker) {
+    //     // Not syncronized
+    //     cb('Not synchronized');
+    //     return false;
+    // };
+    // TODO: Add lock when sync is active
+    return true;
+};
+
+DocumentsManager.prototype.startQuery = function() {
+    return this.db.fetch('documents').objectStore('documents');
+};
+
+DocumentsManager.prototype.list = function(req, handler) {
+    var result = [];
+    this.db.execRequest(req, function (err, cursor) {
+        if (err) {
+            return handler(err);
+        };
+        if (cursor) {
+            result.push(cursor.value);
+            cursor.continue();
+        } else {
+            handler(null, result);
+        }
+    });
+};
+
+DocumentsManager.prototype.add = function(doc, handler) {
+    var cb = handler || function () {};
+    if (!this.beforeEdit('add', doc, handler)) {
+        return;
+    };
+    $$.log('Add doc:', doc);
+    var t = this.db.update('documents', 'history');
+    this.db.execTransaction(t, function (err) {
+        // Add done
+        $$.log('Add doc finish:', err, doc);
+        cb(err, doc, history);
+    }.bind(this));
+    try {
+        doc.id = this.id();
+        doc.version = this.conn.client+doc.id;
+        doc.conn = this.conn.code;
+        t.objectStore('documents').add(doc);
+        var history = {
+            id: this.id(),
+            version: doc.version,
+            operation: 0, // Add
+            tstamp: this.id(),
+            doc_id: doc.id
+        };
+        t.objectStore('history').add(history);
+    } catch (e) {
+        this.db.cancelTransaction(t);
+        cb('Error: '+e);
+    }
+};
+
+DocumentsManager.prototype.update = function(doc, handler) {
+    var cb = handler || function () {};
+    if (!this.beforeEdit('update', doc, handler)) {
+        return;
+    };
+    $$.log('Update doc:', doc);
+    var t = this.db.update('documents', 'history');
+    this.db.execTransaction(t, function (err) {
+        // Add done
+        $$.log('Update doc finish:', err, doc);
+        cb(err, doc, history);
+    }.bind(this));
+    try {
+        var old_version = doc.version;
+        doc.version = this.conn.client+this.id();
+        t.objectStore('documents').put(doc);
+        var history = {
+            id: this.id(),
+            version: doc.version,
+            from_version: old_version,
+            operation: 1, // Update
+            tstamp: this.id(),
+            doc_id: doc.id
+        };
+        t.objectStore('history').add(history);
+    } catch (e) {
+        $$.log('Error update:', e);
+        this.db.cancelTransaction(t);
+        cb('Error: '+e);
+    }
+};
+
+DocumentsManager.prototype.remove = function(doc, handler) {
+    var cb = handler || function () {};
+    if (!this.beforeEdit('remove', doc, handler)) {
+        return;
+    };
+    $$.log('Remove doc:', doc);
+    var t = this.db.update('documents', 'history');
+    this.db.execTransaction(t, function (err) {
+        // Add done
+        $$.log('Remove doc finish:', err, doc);
+        cb(err, doc, history);
+    }.bind(this));
+    try {
+        var old_version = doc.version;
+        t.objectStore('documents').delete(doc.id);
+        var history = {
+            id: this.id(),
+            version: this.conn.client+this.id(),
+            from_version: old_version,
+            operation: 2, // Remove
+            tstamp: this.id(),
+            doc_id: doc.id
+        };
+        t.objectStore('history').add(history);
+    } catch (e) {
+        this.db.cancelTransaction(t);
+        cb('Error: '+e);
     }
 };
 
@@ -197,6 +389,10 @@ SitesManager.prototype.newSite = function(conn, code, handler) {
     this.rest(conn, 'rest/site/create', {code: code}, handler);
 };
 
+SitesManager.prototype.newName = function(conn, code, handler) {
+    this.rest(conn, 'rest/name/create', {code: code}, handler);
+};
+
 SitesManager.prototype.getConnection = function(code, handler) {
     var t = this.db.fetch('connections');
     this.db.execRequest(t.objectStore('connections').index('code').get(code), function (err, cursor) {
@@ -235,6 +431,13 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                 if (err) {
                     return handler(err);
                 };
+                var newData = {
+                    code: conn.code,
+                    url: conn.url,
+                    managed: true,
+                    token: data.token,
+                    client: data.client
+                };
                 if (!data.found) {
                     // Create new 
                     if (!window.confirm('Do you want to create new Container?')) {
@@ -245,13 +448,8 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                         if (err) {
                             return handler(err);
                         };
-                        var newData = {
-                            code: conn.code,
-                            url: conn.url,
-                            managed: true,
-                            token: data.token,
-                            client: data.client
-                        };
+                        newData.token = data.token;
+                        newData.client = data.client;
                         this._addConnection(newData, function (err) {
                             $$.log('_addConnection', err);
                             handler(err, newData);
@@ -260,6 +458,19 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                     }.bind(this));
                 } else {
                     // Need new token
+                    this.newName(conn, conn.code, function (err, data) {
+                        $$.log('New name:', err, data);
+                        if (err) {
+                            return handler(err);
+                        };
+                        newData.token = data.token;
+                        newData.client = data.client;
+                        this._addConnection(newData, function (err) {
+                            $$.log('_addConnection', err);
+                            handler(err, newData);
+                        });
+                        // Add
+                    }.bind(this));
                 }
             }.bind(this));
         } else {
@@ -268,23 +479,6 @@ SitesManager.prototype.initConnection = function(conn, handler) {
         }
     }.bind(this));
 };
-
-var manager = new SitesManager(function(err) {
-    if (err) {
-        return $$.log('Error:', err);
-    }
-    var id = manager.defaultConnection();
-    $$.log('ID:', id);
-    if(!id) {
-        return;
-    }
-    manager.initConnection(id, function (err) {
-        
-    });
-    // manager.siteExist(id, id.code, function (err, data) {
-    //     $$.log('Site:', err, data);
-    // }.bind(this));
-}.bind(manager));
 
 /*
 var db = new ConnectionsDB();

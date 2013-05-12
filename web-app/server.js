@@ -26,9 +26,9 @@ var App = function() {
 
 App.prototype.id = function() {
     var id = new Date().getTime();
-    while(id<this._id) {
-        id++;
-    }
+    while (id <= this._id) {
+        id = this._id+1;
+    };
     this._id = id;
     return id;
 };
@@ -40,7 +40,7 @@ App.prototype.initRest = function() {
     this.app.use('/js', express.static(__dirname + '/js'));
     this.rest('/site/create', this.restNewApplication.bind(this));
     this.rest('/site/get', this.restGetApplication.bind(this));
-    this.rest('/name/get', this.restGetName.bind(this));
+    this.rest('/name/create', this.restCreateName.bind(this));
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
     this.app.listen(3000);
@@ -163,13 +163,34 @@ App.prototype.restNewApplication = function(data, handler) {
                 handler(null, {client: clientID, token: token});
             });
         }.bind(this));
-        done();
     }.bind(this));
 };
 
-App.prototype.restGetName = function(data, handler) {
-    this.log('restGetName', data, data.code);
-    handler('Not implemented');
+App.prototype.restCreateName = function(data, handler) {
+    this.log('restCreateName', data, data.code);
+    if (!data.code) {
+        return handler('Code not passed');
+    };
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        client.query('select id from sites where code = $1', [data.code], function (err, result) {
+            if (err || result.rows.length == 0) {
+                done();
+                return handler('Container not found');
+            };
+            var row = result.rows[0];
+            var siteID = row.id;
+            this.newToken(client, siteID, 0, function (err, clientID, token) {
+                done();
+                if (err) {
+                    return handler('DB error: '+err);
+                };
+                handler(null, {client: clientID, token: token});
+            });
+        }.bind(this));
+    }.bind(this));
 };
 
 var $$ = new App();
