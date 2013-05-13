@@ -74,6 +74,16 @@ WITH (
 ALTER TABLE history
   OWNER TO tango2;
 
+ALTER TABLE history
+   ADD COLUMN version character varying(32);
+
+ALTER TABLE history
+   ADD COLUMN from_version character varying(32);
+
+ALTER TABLE history
+   ADD COLUMN history_id character varying(32);
+
+
 -- Table: documents
 
 -- DROP TABLE documents;

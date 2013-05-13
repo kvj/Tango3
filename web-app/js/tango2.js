@@ -194,6 +194,81 @@ var DocumentsManager = function (conn, handler, config) {
     }.bind(this));
 };
 
+DocumentsManager.prototype.sync = function(manager, handler) {
+    var finish = function (err) {
+        $$.log('Sync finish:', err);
+        // Finishes sync with error
+        return handler(err);
+    }.bind(this);
+    var prepareOwnHistory = function (from) {
+        $$.log('prepareOwnHistory', from);
+        // Fetches history from DB as a list, by marker
+        var t = this.db.fetch('history', 'documents');
+        var fetchFrom = function (cond) {
+            $$.log('fetchFrom', cond);
+            // Does actual fetch
+            this.list(t.objectStore('history').openCursor(cond), function (err, list) {
+                $$.log('List:', list, err);
+                if (err) {
+                    return finish(err);
+                };
+                compressHistory(list, {max: 10000}, {
+                    document: function (id, handler) {
+                        this.db.execRequest(t.objectStore('documents').get(id), handler);
+                    }.bind(this)
+                }, function (err, result) {
+                    sendHistory(result);
+                });
+            }.bind(this));
+        }.bind(this);
+        var req = t.objectStore('history').get(from || '');
+        this.db.execRequest(req, function (err, result) {
+            if (err) {
+                return finish(err);
+            };
+            if (result) {
+                // Found
+                fetchFrom(IDBKeyRange.lowerBound(result.id, true));
+            } else {
+                // Not found - first item in history
+                req = t.objectStore('history').index('tstamp').openCursor();
+                this.db.execRequest(req, function (err, result) {
+                    // body...
+                    if (err) {
+                        return finish(err);
+                    };
+                    if (!result) {
+                        // No data in history?
+                        return fetchFrom('');
+                    };
+                    fetchFrom(IDBKeyRange.lowerBound(result.value.id, false));
+                }.bind(this));
+            };
+        }.bind(this));
+    }.bind(this);
+    var sendHistory = function (history) {
+        $$.log('sendHistory', history);
+        var data = {data: history};
+        manager.sendHistory(this.conn, data, function (err, data) {
+            $$.log('sendHistory result:', err, data);
+            if (err) {
+                return finish(err);
+            };
+            if (history.length>0) {
+                // Have data
+                prepareOwnHistory(history[history.length-1].id);
+            } else {
+                receiveHistory(this.conn.marker);
+            }
+        }.bind(this));
+        // Compress and sends history to server
+    }.bind(this);
+    var receiveHistory = function (from) {
+        // Receives history and applies changes to own DB, saves marker
+    }.bind(this);
+    prepareOwnHistory(this.conn.marker);
+};
+
 DocumentsManager.prototype.id = function() {
     var id = new Date().getTime();
     while (id <= this._id) {
@@ -247,12 +322,13 @@ DocumentsManager.prototype.add = function(doc, handler) {
         cb(err, doc, history);
     }.bind(this));
     try {
-        doc.id = this.id();
-        doc.version = this.conn.client+doc.id;
+        doc.id = this.conn.client+this.id();
+        doc.version = doc.id;
         doc.conn = this.conn.code;
         t.objectStore('documents').add(doc);
         var history = {
-            id: this.id(),
+            id: this.conn.client+this.id(),
+            client: this.conn.client,
             version: doc.version,
             operation: 0, // Add
             tstamp: this.id(),
@@ -282,7 +358,8 @@ DocumentsManager.prototype.update = function(doc, handler) {
         doc.version = this.conn.client+this.id();
         t.objectStore('documents').put(doc);
         var history = {
-            id: this.id(),
+            id: this.conn.client+this.id(),
+            client: this.conn.client,
             version: doc.version,
             from_version: old_version,
             operation: 1, // Update
@@ -313,7 +390,8 @@ DocumentsManager.prototype.remove = function(doc, handler) {
         var old_version = doc.version;
         t.objectStore('documents').delete(doc.id);
         var history = {
-            id: this.id(),
+            id: this.conn.client+this.id(),
+            client: this.conn.client,
             version: this.conn.client+this.id(),
             from_version: old_version,
             operation: 2, // Remove
@@ -391,6 +469,16 @@ SitesManager.prototype.newSite = function(conn, code, handler) {
 
 SitesManager.prototype.newName = function(conn, code, handler) {
     this.rest(conn, 'rest/name/create', {code: code}, handler);
+};
+
+SitesManager.prototype.sendHistory = function(conn, data, handler) {
+    data.token = conn.token;
+    this.rest(conn, 'rest/in', data, handler);
+};
+
+SitesManager.prototype.receiveHistory = function(conn, ctx, handler) {
+    ctx.token = conn.token;
+    this.rest(conn, 'rest/out', ctx, handler);
 };
 
 SitesManager.prototype.getConnection = function(code, handler) {

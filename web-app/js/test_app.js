@@ -82,6 +82,15 @@ App.prototype.showUI = function() {
         };
     }.bind(this));
     div.appendChild(addButton);
+    var syncButton = document.createElement('input');
+    syncButton.setAttribute('type', 'button');
+    syncButton.setAttribute('value', 'Sync');
+    syncButton.addEventListener('click', function  (evt) {
+        this.db.sync(this.manager, function (err) {
+            
+        });
+    }.bind(this));
+    div.appendChild(syncButton);
     this.showItems();
 };
 

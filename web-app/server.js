@@ -41,6 +41,8 @@ App.prototype.initRest = function() {
     this.rest('/site/create', this.restNewApplication.bind(this));
     this.rest('/site/get', this.restGetApplication.bind(this));
     this.rest('/name/create', this.restCreateName.bind(this));
+    this.rest('/in', this.restIncomingData.bind(this), {token: true});
+    this.rest('/out', this.restOutgoingData.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
     this.app.listen(3000);
@@ -63,7 +65,22 @@ App.prototype.initDB = function(handler) {
     var port = process.env[PG_PORT_VAR] || PG_PORT_DEF;
     var appl = process.env[PG_APPL_VAR] || PG_APPL_DEF;
     this.dbUrl = 'postgres://'+user+':'+pass+'@'+host+':'+port+'/'+appl;
-    handler();
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler(err);
+        };
+        client.query('select id from history order by id desc limit 1', function (err, result) {
+            done();
+            if (err) {
+                return handler(err);
+            };
+            if (result.rows.length>0) {
+                this._id = result.rows[0].id;
+                this.log('Loaded previous ID:', this._id);
+            };
+            handler(null);
+        }.bind(this));
+    }.bind(this));
 };
 
 App.prototype.db = function(handler) {
@@ -78,18 +95,59 @@ App.prototype.rest = function (path, handler, config) {
         this.log('Incoming rest:', path, req.body);
         var sendOutput = function (obj) {
             res.send(obj);
-        }
-        try {
-            handler(req.body, function (err, output) {
+        };
+
+        var checkToken = function (handler) {
+            if (!config || !config.token) {
+                return handler(null, {});
+            };
+            this.db(function (err, client, done) {
                 if (err) {
-                    output = {error: err};
+                    return handler('DB error');
                 };
-                sendOutput(output);
-            }, req, res);
-        } catch (e) {
-            this.log('Rest error:', e);
-            sendOutput({error: 'Error: '+e});
-        }
+                client.query('select id, token, status, client, site_id from tokens where token=$1', [req.body.token], function (err, result) {
+                    if (err || result.rows.length == 0) {
+                        // Not found
+                        done();
+                        return handler('Token not found');
+                    };
+                    var row = result.rows[0];
+                    var info = {
+                        token: row.token,
+                        token_id: row.id,
+                        status: row.status,
+                        client: row.client,
+                        site_id: row.site_id
+                    };
+                    // TODO: Check token status
+                    client.query('select code from sites where id=$1', [row.site_id], function (err, result) {
+                        done();
+                        if (err || result.rows.length == 0) {
+                            // Not found
+                            return handler('Container not found');
+                        };
+                        info.code = result.rows[0].code;
+                        handler(null, info);
+                    }.bind(this));
+                }.bind(this));
+            }.bind(this));
+        }.bind(this);
+        checkToken(function (err, info) {
+            if (err) {
+                return sendOutput({error: err});
+            };
+            try {
+                handler(req.body, function (err, output) {
+                    if (err) {
+                        output = {error: err};
+                    };
+                    sendOutput(output);
+                }, info, req, res);
+            } catch (e) {
+                this.log('Rest error:', e);
+                sendOutput({error: 'Error: '+e});
+            }
+        }.bind(this));
     }.bind(this));
 };
 
@@ -105,6 +163,99 @@ App.prototype.htmlLoadApplication = function(req, res) {
 App.prototype.htmlGenerateApplication = function(req, res) {
     var id = this.random(8);
     res.send('<a href="/'+id+'.wiki.html">Create new Container ['+id+']</a>');
+};
+
+App.prototype.restOutgoingData = function(ctx, handler, info) {
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+    }.bind(this));
+};
+
+App.prototype.restIncomingData = function(data, handler, info) {
+    this.log('Incoming data:', data, info);
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        var insertHistory = function (item, index) {
+            // body...
+            client.query('insert into history (id, site_id, client, created, operation, document_id, version, from_version, history_id) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)', [this.id(), info.site_id, item.client, new Date().getTime(), item.operation, item.doc_id, item.version, item.from_version, item.id], function (err) {
+                if (err) {
+                    done();
+                    this.log('Failed to insert history', err);
+                    return handler('DB error');
+                };
+                // Inserted
+                processItem(index+1);
+            }.bind(this));
+        }.bind(this);
+        var processItem = function (index) {
+            if (index>=data.data.length) {
+                done();
+                return handler(null, {});
+            };
+            var item = data.data[index];
+            this.log('processItem', item);
+            var documentOperation = function () {
+                var query = '';
+                var args = [];
+                if (0 == item.operation) {
+                    // Insert
+                    query = 'insert into documents (id, document_id, site_id, version, status, created, updated) values ($1, $2, $3, $4, $5, $6, $7)';
+                    args = [this.id(), item.doc_id, info.site_id, item.version, 0, new Date().getTime(), new Date().getTime()];
+                };
+                if (1 == item.operation) {
+                    query = 'update documents set version=$1, updated=$2 where document_id=$3';
+                    args = [item.version, new Date().getTime(), item.doc_id];
+                };
+                if (2 == item.operation) {
+                    // Delete
+                    query = 'delete from documents where document_id=$1';
+                    args = [item.doc_id];
+                };
+                client.query(query, args, function (err) {
+                    if (err) {
+                        done();
+                        this.log('Failed to update documents', err);
+                        return handler('DB error');
+                    };
+                    // Documets table modified
+                    if (item.doc) {
+                        // Also have doc
+                        client.query('update documents set body=$1 where document_id=$2', [item.doc, item.doc_id], function (err) {
+                            if (err) {
+                                this.log('Failed to replace document', err);
+                                done();
+                                return handler('DB error');
+                            };
+                            // Updated
+                            insertHistory(item, index);
+                        }.bind(this));
+                    } else {
+                        // Insert history
+                        insertHistory(item, index);
+                    }
+                }.bind(this));
+            }.bind(this);
+            client.query('select id from history where history_id=$1', [item.id], function (err, result) {
+                if (err) {
+                    this.log('Failed to search history', err);
+                    done();
+                    return handler('DB error');
+                };
+                if (result.rows.length>0) {
+                    // Already inserted
+                    this.log('Already added', item);
+                    processItem(index+1);
+                } else {
+                    documentOperation();
+                };
+            }.bind(this));
+        }.bind(this);
+        processItem(0);
+    }.bind(this));
 };
 
 App.prototype.restGetApplication = function(data, handler) {
