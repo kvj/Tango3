@@ -1,0 +1,78 @@
+.simpleEmbed {
+    margin-top: 0.1em;
+    border-top: 1px dashed #aaaaaa;
+}
+
+.selectorBox {
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+.selectorSelect {
+    margin-right: 0.2em;
+}
+
+.selectorTitle {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #888888;
+}
+
+.multiToggle {
+    display: inline-block;
+}
+
+.multiToggleItem {
+    display: inline-block;
+    vertical-align: bottom;
+    border: 2px solid #888888;
+    padding: 0 0.1em 0 0.1em;
+    margin-right: 0.2em;
+    min-width: 1em;
+    text-align: center;
+    cursor: pointer;
+}
+
+.multiToggleItemDisabled {
+    opacity: 0.2;
+    display: none;
+}
+
+.multiToggleVisible > .multiToggleItemDisabled  {
+    display: inline-block;
+}
+
+.dateSelectorRoot {
+}
+
+.dateSelectorRootTag {
+    clear: both;
+    border: 1px dashed #aaaaaa;
+    margin-top: 0.2em;
+}
+
+.dateSelectorLink {
+    margin: 0 0.3em;
+    color: #00aa00;
+}
+
+.dateSelectorDate {
+    display: inline-block;
+    padding: 0.2em;
+    width: 7em;
+    text-align: center;
+    border: 1px solid #aaaaaa;
+}
+
+.star {
+    text-decoration: none;
+    font-size: 1.2em;
+}
+
+.starOn {
+    color: #ffaa00;
+}
+
+.starOff {
+    color: #000000;
+}

@@ -87,8 +87,11 @@ App.prototype.showUI = function() {
     syncButton.setAttribute('value', 'Sync');
     syncButton.addEventListener('click', function  (evt) {
         this.db.sync(this.manager, function (err) {
-            
-        });
+            if (err) {
+                return this.showError(err);
+            };
+            this.showItems();
+        }.bind(this));
     }.bind(this));
     div.appendChild(syncButton);
     this.showItems();

@@ -12,6 +12,7 @@ var PG_APPL_DEF = 'tango2';
 
 var express = require('express');
 var pg = require('pg');
+var common = require('./js/common');
 var App = function() {
     // Math.randomize(new Date().getTime());
     this._id = 0;
@@ -38,6 +39,8 @@ App.prototype.initRest = function() {
     this.app = express();
     this.app.use(express.json());
     this.app.use('/js', express.static(__dirname + '/js'));
+    this.app.use('/lib', express.static(__dirname + '/lib'));
+    this.app.use('/dev', express.static(__dirname + '/dev'));
     this.rest('/site/create', this.restNewApplication.bind(this));
     this.rest('/site/get', this.restGetApplication.bind(this));
     this.rest('/name/create', this.restCreateName.bind(this));
@@ -96,7 +99,6 @@ App.prototype.rest = function (path, handler, config) {
         var sendOutput = function (obj) {
             res.send(obj);
         };
-
         var checkToken = function (handler) {
             if (!config || !config.token) {
                 return handler(null, {});
@@ -170,6 +172,68 @@ App.prototype.restOutgoingData = function(ctx, handler, info) {
         if (err) {
             return handler('DB error');
         };
+        var res = {
+            clean: false,
+            data: []
+        };
+        client.query('select id from history where history_id=$1', [ctx.from || null], function (err, result) {
+            if (err) {
+                done();
+                return handler('DB error');
+            };
+            // Check, was marker found or not
+            var marker = 0;
+            if (result.rows.length>0) {
+                // Found
+                marker = result.rows[0].id;
+            } else {
+                // Not found - from the begin
+                res.clean = true;
+            };
+            this.log('Sending history from:', marker, result);
+            client.query('select client, operation, document_id, history_id, id, version, from_version, created from history where id>$1 and site_id=$2 order by id limit $3', [marker, info.site_id, 200], function (err, result) {
+                if (err) {
+                    done();
+                    return handler('DB error');
+                };
+                var history = [];
+                for (var i = 0; i < result.rows.length; i++) {
+                    var row = result.rows[i];
+                    history.push({
+                        client: row.client,
+                        doc_id: row.document_id,
+                        id: row.history_id,
+                        operation: row.operation,
+                        tstamp: row.created,
+                        version: row.version,
+                        from_version: row.from_version
+                    });
+                };
+                var conf = {max: 50000};
+                if (!res.clean) {
+                    // Send only version of other clients
+                    conf.client = info.client;
+                };
+                common.compressHistory(history, conf, {
+                    document: function (id, handler) {
+                        client.query('select body from documents where document_id=$1', [id], function (err, result) {
+                            if (err) {
+                                return handler(err);
+                            };
+                            if (result.rows.length>0) {
+                                // Found
+                                return handler(null, result.rows[0].body);
+                            };
+                            return handler();
+                        }.bind(this));
+                    }.bind(this)
+                }, function (err, result) {
+                    done();
+                    res.data = result;
+                    handler(null, res);
+                }.bind(this));
+            }.bind(this));
+        }.bind(this));
     }.bind(this));
 };
 

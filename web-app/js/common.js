@@ -29,7 +29,7 @@ var compressHistory = function (history, config, controller, handler) {
 					// Document not found - skip this history item
 					return nextPiece(i+1);
 				};
-				var docTxt = JSON.stringify(doc);
+				var docTxt = doc;
 				if (maxSize != -1 && result.length>0 && !removed && docTxt.length+size>maxSize) {
 					// Stop
 					return handler(null, result);
@@ -45,4 +45,27 @@ var compressHistory = function (history, config, controller, handler) {
 		}
 	};
 	nextPiece(0);
+};
+
+var iterateOver = function (array, handler, cb) {
+	var result = [];
+	var onItem = function (index) {
+		if (index>=array.length) {
+			return cb? cb(null, result): null;
+		};
+		var item = array[index];
+		handler(item, function (err, res) {
+			if (err) {
+				return cb? cb(err, item, index): null;
+			};
+			result.push(res);
+			onItem(index+1);
+		}, index);
+	};
+	onItem(0);
 }
+
+if (typeof(module) != 'undefined') {
+	module.exports.compressHistory = compressHistory;
+	module.exports.iterateOver = iterateOver;
+};

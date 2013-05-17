@@ -1,0 +1,3634 @@
+<!DOCTYPE html PUBLIC "null" "null">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title data-marker="system">Tango1</title><meta data-marker="system" content="text/html;charset=utf-8" http-equiv="Content-Type" /><meta data-marker="system" content="0.1" name="Tango1-version" /><meta name="viewport" content="width=device-width, initial-scale=1" data-marker="system" /><script data-marker="system" charset="utf-8" type="text/javascript"><!--
+(function() {
+    var EventEmitter = function(emitter) {//Creates new event emitter
+        this.events = {};
+        this.emitter = emitter;
+    };
+
+    EventEmitter.prototype.on = function(type, handler, top) {//Adds new handler
+        if (!type || !handler) {//Invalid params
+            return false;
+        };
+        var arr = [];
+        if (!this.events[type]) {//Add empty array
+            this.events[type] = arr;
+        } else {//Get array
+            arr = this.events[type];
+        };
+        for (var i = 0; i < arr.length; i++) {//Check for duplicate
+            if (arr[i] == handler || (arr[i].marker && arr[i].marker == handler.marker)) {//Already here
+                arr[i] = handler;
+                return false;
+            };
+        };
+        if (top) {
+            arr.splice(0, 0, handler);
+        } else {
+            arr.push(handler);
+        }
+        return true;
+    };
+
+    EventEmitter.prototype.off = function(type, handler) {//Removes handler
+        if (!type) {//Stop
+            return false;
+        };
+        var arr = this.events[type];
+        if (!arr) {//Stop
+            return false;
+        };
+        if (!handler) {//Remove all handlers
+            this.events[type] = [];
+            return true;
+        };
+        for (var i = 0; i < arr.length; i++) {//Look for handler
+            if (arr[i] == handler || (arr[i].marker && arr[i].marker == handler.marker)) {//Found - splice
+                arr.splice(i, 1);
+                i--;
+            };
+        };
+        return true;
+    };
+
+    EventEmitter.prototype.emit = function(type, evt, obj) {//Calls handlers
+        if (!type) {//Stop
+            return false;
+        };
+        if (!evt) {//Create empty
+            evt = {};
+        };
+        if (!evt.type) {//Add type
+            evt.type = type;
+        };
+        if (!evt.target) {//Add target
+            evt.target = obj || this.emitter || this;
+        };
+        var arr = this.events[type] || [];
+        var prevented = false;
+        evt.stop = function () {
+            prevented = true;
+        };
+        var arrClone = arr.slice(0);
+        for (var i = 0; i < arrClone.length; i++) {//Call handler one by one
+            // try {
+                var result = arrClone[i].call(evt.target, evt);
+                if (result == false) {//Stop executing
+                    return false;
+                };
+                if (prevented) {
+                    return result;
+                };
+            // } catch (e) {//Handler error
+            //     log('Error in handler:', e);
+            // }
+        };
+        return true;
+    };
+    var Item = function () {
+    };
+
+    Item.prototype.unixToDate = function(text) {
+        if (!text) return null;
+        try {
+            var unix = parseInt(text, 10);
+            if (unix > 0) {
+                return new Date(unix);
+            }
+        } catch (e) {
+        }
+        return null;
+    }
+
+    Item.prototype.init = function(element, storage) {
+        this.storage = storage;
+        this.title = element.getAttribute('data-title');
+        var tagsStr = element.getAttribute('data-tags');
+        this.setTags(tagsStr);
+        var text = '';
+        var nl = element.childNodes;
+        for (var i = 0; i<nl.length; i++) {
+            var text = nl[i].textContent;
+        }
+        this.text = text;
+        this.file = element.getAttribute('data-file');
+        this.created = this.unixToDate(element.getAttribute('data-created'));
+        this.edited = this.unixToDate(element.getAttribute('data-edited'));
+    };
+    Item.prototype.setTags = function (tagsStr) {
+        this.tags = this.storage.parseTags(tagsStr);
+    };
+    Item.prototype.splitText = function (text, delim, options) {
+        if (!text || !delim) {
+            return [];
+        };
+        var from = 0;
+        var result = [];
+        while (from<text.length) {
+            while (text.indexOf(delim, from) == from) {
+                // Skip delim at begin
+                from += delim.length;
+            };
+            var end = text.indexOf(delim, from); // Next
+            if (end == -1) {
+                end = text.length;
+            };
+            if (options && options.onnext) {
+                end = options.onnext(from, end);
+            };
+            if (from < end) {
+                var part = text.substring(from, end);
+                if (options && options.onvalue) {
+                    part = options.onvalue(part);
+                }
+                result.push(part);
+            }
+            from = end;
+        };
+        return result;
+    };
+    Item.prototype.skipPair = function (text, start, pairBegin, pairEnd) {
+        var from = start + pairBegin.length;
+        var deep = 1;
+        while (deep>0) {
+            var beginPos = text.indexOf(pairBegin, from);
+            var endPos = text.indexOf(pairEnd, from);
+            if (beginPos == -1 && endPos == -1) {
+                // Nothing found - error
+                return -1;
+            };
+            if (beginPos != -1) {
+                // Have one more begin
+                if (endPos == -1 || endPos>beginPos) {
+                    // begin before end
+                    from = beginPos + pairBegin.length;
+                    deep++;
+                    continue;
+                }
+            };
+            if (endPos != -1) {
+                if (beginPos == -1 || endPos<beginPos) {
+                    // end before begin
+                    from = endPos + pairEnd.length;
+                    deep--;
+                    if (deep == 0) {
+                        return from;
+                    }
+                    continue;
+                }
+            };
+        };
+        return -1;
+    };
+    var Storage = function() {
+    };
+    Storage.prototype.eventEmitter = EventEmitter;
+    Storage.prototype.itemPrototype = Item;
+    Storage.prototype.log = function() {
+        if (!this.dev) {
+            return;
+        }
+        if (!window.console) { // No console
+            return;
+        };
+        console.log.apply(console, arguments);
+    };
+    Storage.prototype.parseTags = function (tagsStr) {
+        if (!tagsStr) {
+            return [];
+        };
+        return Item.prototype.splitText(tagsStr, ' ', {
+            onnext: function (from, end) {
+                if (tagsStr.substr(from, 1) == '[') {
+                    // Multiword tag
+                    var endTag = Item.prototype.skipPair(tagsStr, from, '[', ']');
+                    if (-1 != endTag) {
+                        return endTag;
+                    }
+                }
+                return end;
+            }.bind(this),
+            onvalue: function (text) {
+                while (text.charAt(0) == '[' && text.charAt(text.length-1) == ']' && -1 == text.indexOf(' ')) {
+                    text = text.substr(1, text.length-2);
+                }
+                return text;
+            }
+        });
+    };
+    var head = document.getElementsByTagName('head')[0];
+    Storage.prototype.init = function() {
+        this.skipPair = Item.prototype.skipPair;
+        document.body.onbeforeunload = function(event) {
+            return this.unload(event);
+        }.bind(this);
+        this.events = new this.eventEmitter();
+        this.dev = true;
+        this.dirty = false;
+        this.pluginsLoading = 0;
+        this.pluginsLoaded = {};
+        this.storageEl = document.querySelectorAll('storage')[0]; // First storage
+        this.find({
+            tags: 'systemPlugin'
+        }, function(item) {
+//                        this.log('Plugin:', item.title, item.text);
+            this.pluginsLoading++;
+            var el = document.createElement('script');
+            el.setAttribute('data-title', item.title);
+            if (item.file && this.dev) {
+                // Use src
+                el.setAttribute('src', item.file);
+            } else { // Default
+                el.appendChild(document.createTextNode('(function($$) {'+item.text+'}).call(this, $$);'));
+            }
+            head.appendChild(el);
+        }.bind(this));
+        setTimeout(function() {
+            if (this.pluginsLoading>0) {
+                alert('Error loading plugins, taking too long');
+            }
+        }.bind(this), 5000);
+        this.find({
+            tags: 'systemStyle'
+        }, function(item) {
+//                        this.log('Style:', item.title, item.text);
+            var el;
+            if (item.file && this.dev) {
+                el = document.createElement('link');
+                el.setAttribute('rel', 'stylesheet');
+                el.setAttribute('href', item.file);
+            } else {
+                el = document.createElement('style');
+                el.setAttribute('type', 'text/css');
+                el.appendChild(document.createTextNode(item.text));
+            };
+            el.setAttribute('data-title', item.title);
+            head.appendChild(el);
+        }.bind(this));
+    };
+    Storage.prototype.pluginLoaded = function(name) {
+        setTimeout(function() {
+            if (name && !this.pluginLoaded[name]) {
+                this.pluginLoaded[name] = true;
+                this.pluginsLoading--;
+                if (this.pluginsLoading == 0) {
+                    this.events.emit('start');
+                }
+            };
+        }.bind(this), 0);
+    };
+    Storage.prototype.unload = function(event) {
+        if(this.dirty) {
+            return 'There are unsaved changed. Close page?';
+        }
+        return null;
+    }
+    Storage.prototype.setDirty = function (dirty) {
+        if (!this.dirty && dirty) {
+            // Became dirty
+            this.dirty = true;
+            this.events.emit('dirty');
+        } else if (this.dirty && !dirty) {
+            // Saved
+            this.dirty = false;
+            this.events.emit('saved');
+        }
+    }
+    Storage.prototype.find = function(config, each) {
+        var selector = 'item';
+        if (config.title) {
+            // Filter by title
+            selector += '[data-title="'+config.title+'"]'
+        };
+        var tags = [];
+        if (config.tags) {
+            tags = config.tags;
+            if (typeof(tags) == 'string') {
+                tags = [tags];
+            }
+            for (var i = 0; i<tags.length; i++) {
+                var tag = tags[i].trim();
+                if (tag.indexOf(' ')>0 && tag.charAt(0) != '[') {
+                    tag = '['+tag+']';
+                }
+                selector += '[data-tags*="'+tag+'"]';
+            }
+        }
+//                    this.log('Search:', selector);
+        var nl = this.storageEl.querySelectorAll(selector);
+//                    this.log('Found:', nl);
+        var result = [];
+        for (var i = 0; i<nl.length; i++) {
+            var item = new this.itemPrototype();
+            if (config.filter) {
+                if (!config.filter(nl[i])) {
+                    continue;
+                }
+            }
+            item.init(nl[i], this);
+            var skip = false;
+            for (var j = 0; j<tags.length; j++) {
+                if (item.tags.indexOf(tags[j]) == -1) {
+                    // Not found tag
+                    skip = true;
+                    continue;
+                }
+            };
+            if (config.filterOut && !skip) {
+                if (!config.filterOut(item, nl[i])) {
+                    continue;
+                }
+            }
+            if (skip) {
+                continue;
+            };
+            if (each && !config.sort) { // Each mode
+                each(item, nl[i], i, nl.length);
+            } else { // Put into result
+                result.push(item);
+            }
+            if (config.sort) {
+                result = result.sort(config.sort);
+            }
+        };
+        return result;
+    };
+    Storage.prototype.remove = function(title) {
+        this.find({title: title}, function(_item, _el) {
+            this.storageEl.removeChild(_el);
+            this.events.emit('change', {remove: true, title: title, item: _item});
+        }.bind(this));
+        this.setDirty(true);
+    };
+    Storage.prototype.update = function(title, newtitle, content, tags) {
+//                    this.log('Update', title, newtitle, content, tags, typeof(newtitle), typeof(content), typeof(tags));
+        var err = function (error) {
+            this.events.emit('updated', {err: error});
+            return error;
+        }.bind(this);
+        if (!title) {
+            // No title, couldnt find
+            return err('No title');
+        }
+        var event = {
+            title: title
+        };
+        var el = null;
+        var item = null;
+        this.find({title: title}, function(_item, _el) {
+            el = _el;
+            item = _item;
+        });
+        if (!item || !el) {
+            // Not found, create new
+            if (!newtitle || !newtitle.trim()) {
+                return err('No new title');
+            };
+            this.find({title: newtitle}, function(_item, _el) {
+                el = _el;
+                item = _item;
+            });
+
+            if (el) {
+                if(!confirm('Item with same name exist. Overwrite?')) {
+                    return err('Cancelled by user');
+                }
+            } else {
+                event.add = true;
+                el = document.createElement('item');
+                el.setAttribute('data-created', new Date().getTime());
+                this.storageEl.appendChild(el);
+                el.setAttribute('data-title', title);
+                item = new this.itemPrototype();
+                item.init(el, this);
+            }
+        };
+        if (!event.add) {
+            event.edit = true;
+            event.tags = item.tags;
+        };
+        // Update
+        if (newtitle && newtitle.trim()) {
+            if (newtitle != title) {
+                var oldEl = null;
+                this.find({title: newtitle}, function(_item, _el) {
+                    oldEl = _el;
+                });
+                if (oldEl) {
+                    if(!confirm('Item with same name exist. Overwrite?')) {
+                        return err('Cancelled by user');
+                    } else {
+                        // Remove oldEl
+                        oldEl.parentNode.removeChild(oldEl);
+                    }
+                }
+            }
+            el.setAttribute('data-title', newtitle);
+            item.title = newtitle;
+        };
+        el.setAttribute('data-edited', new Date().getTime());
+        if (typeof(content) == 'string') {
+            el.innerHTML = '';
+//                        $$.log('Create content: ', document);
+            el.appendChild(document.createComment(content));
+            item.text = content;
+        };
+        if (typeof(tags) == 'string') {
+            item.setTags(tags);
+            el.setAttribute('data-tags', item.tags.join(' '));
+        } else {
+            if (Array.isArray(tags)) {
+                item.tags = tags;
+                el.setAttribute('data-tags', item.tags.join(' '));
+            }
+        }
+        event.item = item;
+        this.events.emit('change', event);
+        this.setDirty(true);
+        return err();
+    };
+    Storage.prototype.save = function (config, handler) {
+        if (!window.tango1SaveConfig) {
+            if (handler) handler ('Not supported');
+            return;
+        }
+        var cfg = window.tango1SaveConfig;
+        var ns = 'http://www.w3.org/1999/xhtml';
+        var doc = document.implementation.createDocument(ns, "html", document.implementation.createDocumentType('html', null, null));
+        var head = doc.createElementNS(ns, 'head');
+        doc.documentElement.appendChild(head);
+        var nl = document.head.querySelectorAll('*[data-marker="system"]');
+        for (var i = 0; i<nl.length; i++) {
+            var n;
+            if ('SCRIPT' == nl[i].nodeName) {
+                n = nl[i].cloneNode(false);
+                var text = nl[i].textContent;
+                text = text.substring(4, text.length-3); // Remove comments
+//                            $$.log('Saving string:', text);
+                n.appendChild(doc.createComment(text));
+            } else {
+                n = nl[i].cloneNode(true);
+            }
+            head.appendChild(n);
+        };
+        var body = document.body.cloneNode(false);
+        doc.documentElement.appendChild(body);
+        var storage = doc.createElementNS(ns, 'storage');
+        doc.documentElement.appendChild(storage);
+        nl = this.storageEl.childNodes;
+        for (var i = 0; i<nl.length; i++) {
+            if ('ITEM' != nl[i].nodeName) {
+                continue;
+            }
+            var n = nl[i].cloneNode(true);
+            storage.appendChild(n);
+        };
+        var output = doc;
+        if (!cfg.sendDOM) {
+            var oSerializer = new XMLSerializer();
+            output = '';
+            var stream = {
+                close: function() {
+                },
+                flush: function() {
+                },
+                write: function(string, count) {
+                  $$.log("Write"+string+"\n "+count);
+                  output += string;
+                }
+            };
+            oSerializer.serializeToStream(doc, stream, 'utf-8');
+        };
+        var resultHandler = function(event) {
+        }.bind(this);
+        if (cfg.resultEvent) {
+            window.addEventListener(cfg.resultEvent, resultHandler, false);
+        };
+        if (cfg.event) {
+            var resultHandler = function(event) {
+                window.removeEventListener(cfg.resultEvent, resultHandler);
+                if (!event.detail.err) {
+                    this.setDirty(false);
+                }
+                if (handler) handler (event.detail.err, event.detail.message);
+            }.bind(this);
+            window.addEventListener(cfg.resultEvent, resultHandler);
+            var evt = new CustomEvent(cfg.event, {detail: {dom: output, dev: this.dev}});
+            // evt.dom = output;
+//            $$.log('Sending', cfg, evt.dom, evt, window.location);
+            window.dispatchEvent(evt);
+        };
+    };
+    var $$ = new Storage();
+    window.$$ = $$;
+}).call(this);
+--></script></head><body onload="$$.init();"></body><storage><item data-file="core.js" data-tags="systemPlugin" data-title="CorePlugin"><!--if (typeof String.prototype.startsWith != 'function') {
+    String.prototype.startsWith = function (str){
+        return this.slice(0, str.length) == str;
+    };
+};
+
+if (typeof String.prototype.endsWith != 'function') {
+    String.prototype.endsWith = function (str){
+        return this.slice(-str.length) == str;
+    };
+};
+
+var dateFormat = function () {
+    var token = /d{1,4}|m{1,4}|w{1,2}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
+        timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
+        timezoneClip = /[^-+\dA-Z]/g,
+        pad = function (val, len) {
+            val = String(val);
+            len = len || 2;
+            while (val.length < len) val = "0" + val;
+            return val;
+        };
+
+    // Regexes and supporting functions are cached through closure
+    return function (date, mask, utc) {
+        var dF = dateFormat;
+
+        // You can't provide utc if you skip other args (use the "UTC:" mask prefix)
+        if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
+            mask = date;
+            date = undefined;
+        }
+
+        // Passing date through Date applies Date.parse, if necessary
+        date = date ? new Date(date) : new Date;
+        if (isNaN(date)) throw SyntaxError("invalid date");
+
+        // Allow setting the utc argument via the mask
+        if (mask.slice(0, 4) == "UTC:") {
+            mask = mask.slice(4);
+            utc = true;
+        }
+
+        var _ = utc ? "getUTC" : "get",
+            d = date[_ + "Date"](),
+            D = date[_ + "Day"](),
+            w = date[_ + "Week"](),
+            m = date[_ + "Month"](),
+            y = date[_ + "FullYear"](),
+            H = date[_ + "Hours"](),
+            M = date[_ + "Minutes"](),
+            s = date[_ + "Seconds"](),
+            L = date[_ + "Milliseconds"](),
+            o = utc ? 0 : date.getTimezoneOffset(),
+            flags = {
+                d:    d,
+                dd:   pad(d),
+                ddd:  dF.i18n.dayNames[D],
+                dddd: dF.i18n.dayNames[D + 7],
+                w:    w,
+                ww:   pad(w),
+                m:    m + 1,
+                mm:   pad(m + 1),
+                mmm:  dF.i18n.monthNames[m],
+                mmmm: dF.i18n.monthNames[m + 12],
+                yy:   String(y).slice(2),
+                yyyy: y,
+                h:    H % 12 || 12,
+                hh:   pad(H % 12 || 12),
+                H:    H,
+                HH:   pad(H),
+                M:    M,
+                MM:   pad(M),
+                s:    s,
+                ss:   pad(s),
+                l:    pad(L, 3),
+                L:    pad(L > 99 ? Math.round(L / 10) : L),
+                t:    H < 12 ? "a"  : "p",
+                tt:   H < 12 ? "am" : "pm",
+                T:    H < 12 ? "A"  : "P",
+                TT:   H < 12 ? "AM" : "PM",
+                Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
+                o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
+                S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
+            };
+
+        return mask.replace(token, function ($0) {
+            return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
+        });
+    };
+}();
+
+// Internationalization strings
+dateFormat.i18n = {
+    dayNames: [
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+    ],
+    monthNames: [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+    ]
+};
+
+// For convenience...
+Date.prototype.format = function (mask, utc) {
+    return dateFormat(this, mask, utc);
+};
+
+Date.prototype.getWeek = function (dowOffset) {
+    dowOffset = typeof(dowOffset) == 'int' ? dowOffset : 0; //default dowOffset to zero
+    var newYear = new Date(this.getFullYear(),0,1);
+    var day = newYear.getDay() - dowOffset; //the day of week the year begins on
+    day = (day >= 0 ? day : day + 7);
+    var daynum = Math.floor((this.getTime() - newYear.getTime() -
+    (this.getTimezoneOffset()-newYear.getTimezoneOffset())*60000)/86400000) + 1;
+    var weeknum;
+    if(day < 4) {
+        weeknum = Math.floor((daynum+day-1)/7) + 1;
+        if(weeknum > 52) {
+            nYear = new Date(this.getFullYear() + 1,0,1);
+            nday = nYear.getDay() - dowOffset;
+            nday = nday >= 0 ? nday : nday + 7;
+            weeknum = nday < 4 ? 1 : 53;
+        }
+    }
+    else {
+        weeknum = Math.floor((daynum+day-1)/7);
+    }
+    return weeknum;
+};
+
+$$.override = function(method, newmethod, instance) {
+    if (!method || !newmethod) {
+        return false;
+    };
+    if (!instance) {
+        instance = this;
+    };
+    if (!instance[method]) {
+        return false;
+    };
+    var superMethod = instance[method].bind(instance);
+    instance[method] = function() {
+        var superArgs = arguments;
+        superMethod.asis = function() {
+            return superMethod.apply(instance, superArgs);
+        }
+        var args = [superMethod];
+        for(var i = 0; i<superArgs.length; i++) {
+            args.push(superArgs[i]);
+        };
+        return newmethod.apply(instance, args);
+    }
+    return true;
+}
+
+var _tagInArray = function(arr, t) {
+    var index = -1;
+    if (typeof(t) == 'string') {
+        index = arr.indexOf(t);
+    } else {
+        for (var j = 0; j<arr.length; j++) {
+            var m = t.exec(arr[j]);
+            if (m) {
+                index = j;
+                break;
+            }
+        }
+    }
+    return index;
+}
+
+$$.createSorter = function(sorter) {
+    var sorts = [];
+    var arr = this.parseTags(sorter);
+    for (var i = 0; i<arr.length; i++) {
+        var txt = arr[i];
+        var inverse = false;
+        if (txt.startsWith('!')) {
+            inverse = true;
+            txt = txt.substr(1);
+        }
+        if ('*title*' == txt) {
+            sorts.push({type: 'title', inverse: inverse});
+        } else if ('*created*' == txt) {
+            sorts.push({type: 'created', inverse: inverse});
+        } else if ('*edited*' == txt) {
+            sorts.push({type: 'edited', inverse: inverse});
+        } else {
+            if (txt.startsWith('/')) {
+                sorts.push({type: 'tag_exp', exp: new RegExp(txt.substr(1)), inverse: inverse});
+            } else {
+                sorts.push({type: 'tag', tag: txt, inverse: inverse});
+            }
+        }
+    }
+    return function (a, b) {
+        for (var i = 0; i<sorts.length; i++) {
+            var sort = sorts[i];
+            var mul = sort.inverse? -1: 1;
+            if (sort.type == 'title') {
+                return a.title>b.title? mul: -mul;
+            }
+            if (sort.type == 'edited') {
+                if (a.edited && b.edited)
+                    return a.edited.getTime()>b.edited.getTime()? mul: -mul;
+            }
+            if (sort.type == 'created') {
+                if (a.created && b.created)
+                    return a.created.getTime()>b.created.getTime()? mul: -mul;
+            }
+            if (sort.type == 'tag_exp') {
+                var hasA = a.hasTag(sort.exp);
+                var hasB = b.hasTag(sort.exp);
+                if (hasA && !hasB) {
+                    return mul;
+                }
+                if (!hasA && hasB) {
+                    return -mul;
+                }
+                if (hasA && hasB) {
+                    return hasA>hasB? mul: -mul;
+                }
+            }
+            if (sort.type == 'tag') {
+                var hasA = a.hasTag(sort.tag);
+                var hasB = b.hasTag(sort.tag);
+                if (hasA && !hasB) {
+                    return mul;
+                }
+                if (!hasA && hasB) {
+                    return -mul;
+                }
+            }
+        }
+        return 0;
+    }.bind(this);
+}
+
+$$.createOperationsFilter = function(filter, all) {
+    if (!filter) return null;
+    if (!Array.isArray(filter)) {
+        filter = [filter];
+    }
+    var ops = [];
+    for (var i = 0; i<filter.length; i++) {
+        if (filter[i].startsWith('!')) {
+            ops.push({op: '!', value: filter[i].substr(1)});
+        }
+        if (filter[i].startsWith('l') || filter[i].startsWith('g')) {
+            var value = filter[i].substr(1);
+            var pattern = null;
+            if (value.startsWith('[') && value.indexOf(']') !=-1) {
+                pattern = value.substring(1, value.indexOf(']'));
+                value = value.substring(value.indexOf(']')+1);
+            }
+            ops.push({op: filter[i].charAt(0), value: value, pattern: pattern});
+        }
+    }
+    if (ops.length == 0) return null;
+    return function (item, el) {
+        for(var i = 0; i<ops.length; i++) {
+            var op = ops[i];
+            var ok = true;
+            if(op.op == '!') {
+                // Not equals
+                ok = item.tags.indexOf(op.value) == -1;
+            }
+            if (op.op == 'l' || op.op == 'g') {
+                ok = false;
+                for (var j = 0; j<item.tags.length; j++) {
+                    if (op.pattern && !item.tags[j].startsWith(op.pattern)) {
+                        continue;
+                    }
+                    var ok = ('l' == op.op && item.tags[j]<op.value) || ('g' == op.op && item.tags[j]>op.value);
+                    if (ok) {
+                        break;
+                    }
+                }
+            }
+            if (all && !ok) {
+                return false;
+            }
+            if (!all && ok) {
+                return true;
+            }
+        };
+        return all? true: false;
+    }
+}
+$$.itemPrototype.prototype.normalizeTag = function(tag) {
+    if (tag && tag.indexOf && tag.indexOf(' ') != -1 && (!tag.startsWith('[') || !tag.endsWith(']'))) {
+        return '['+tag+']';
+    }
+    return tag;
+}
+$$.itemPrototype.prototype.editTag = function(remove, add) {
+    if (!this.tags) {
+        return false;
+    }
+    var changed = false;
+    if (remove && Array.isArray(remove)) {
+        for (var i = 0; i<remove.length; i++) {
+            var index = 0;
+            while((index = _tagInArray(this.tags, remove[i])) != -1) {
+                this.tags.splice(index, 1);
+                changed = true;
+            }
+        }
+    }
+    if (add && Array.isArray(add)) {
+        for (var i = 0; i<add.length; i++) {
+            var tag = add[i];
+            if (tag.indexOf(' ') != -1 && (!tag.startsWith('[') || !tag.endsWith(']'))) {
+                tag = '['+tag+']';
+            }
+            var index = _tagInArray(this.tags, tag);
+            if (index == -1) {
+                // Add
+                this.tags.push(tag);
+                changed = true;
+            }
+        }
+    }
+    return changed;
+};
+
+$$.itemPrototype.prototype.hasTag = function(tag, all) {
+    var tags = tag;
+    if (tag && !Array.isArray(tag)) {
+        tags = [tag];
+    }
+    if(this.tags && this.tags.indexOf) {
+        for (var i = 0; i<tags.length; i++) {
+            var t = this.normalizeTag(tags[i]);
+            var index = _tagInArray(this.tags, t);
+            var has = index != -1;
+            if (all && !has) {
+                return null;
+            }
+            if (!all && has) {
+                return this.tags[index];
+            }
+        };
+        if (all) {
+            return tags;
+        }
+    }
+    return null;
+};
+
+$$.el = function(name, parent, attr, text) {
+    var el = document.createElement(name);
+    if (parent) { // Have parent
+        parent.appendChild(el);
+    };
+    if (attr) {
+        for (var id in attr) {
+            var value = attr[id];
+            if (value && typeof(value) == 'string') {
+                el.setAttribute(id, value);
+            };
+        };
+    }
+    if (text) {
+        // Add text content
+        el.appendChild(document.createTextNode(text));
+    }
+    return el;
+}
+
+$$.addMessage = function(text, options) {
+    var className = 'message';
+    if (options && options.err) {
+        className += ' errorMessage';
+    }
+    var fade = !options || !options.nofade;
+    if (fade) {
+        className += ' fade';
+    }
+    var el = this.el('div', this.messagesDiv, {
+    }, text);
+    el.className = className;
+    el.addEventListener('click', function() {
+        if (el.parentNode) {
+            el.parentNode.removeChild(el);
+        }
+    }.bind(this));
+    if (fade) {
+        setTimeout(function() {
+            if (el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        }.bind(this), 5000);
+    }
+}
+
+$$.initUI = function() {
+    this.shortDate = 'm/d';
+    this.shortDateTime = 'm/d H:MM';
+    // Create center, input, items place
+    this.messagesDiv = this.el('div', document.body, {
+        'class': 'messages'
+    });
+    var root = document.createElement('div');
+    root.className = 'root';
+    document.body.appendChild(root);
+    var titleInputWrap = document.createElement('div');
+    titleInputWrap.className = 'inputWrap';
+    root.appendChild(titleInputWrap);
+    var tbl = this.el('div', titleInputWrap, {
+        style: 'display: inline-table;'
+    });
+    var row = this.el('div', tbl, {
+        style: 'display: table-row;'
+    });
+    var leftCell = this.el('div', row, {
+        style: 'display: table-cell; width: 100%;'
+    });
+    var centerCell = this.el('div', row, {
+        style: 'display: table-cell'
+    });
+    var rightCell = this.el('div', row, {
+        style: 'display: table-cell'
+    });
+    this.configButton = this.el('button', centerCell, {
+        'class': 'configButton'
+    }, 'Config');
+    this.saveButton = this.el('button', rightCell, {
+        'class': 'notShown'
+    }, 'Save');
+    this.saveButton.onclick = function() {
+        this.save({}, function(err, result) {
+            if (err) {
+                alert(err);
+                return;
+            };
+            this.addMessage(result || 'Saved');
+//            $$.log('Save result:', result);
+        }.bind(this));
+    }.bind(this);
+    this.events.on('dirty', function() {
+        this.saveButton.className = '';
+    }.bind(this));
+    this.events.on('saved', function() {
+        this.saveButton.className = 'notShown';
+    }.bind(this));
+    this.titleInput = document.createElement('input');
+    this.titleInput.setAttribute('type', 'text');
+    this.titleInput.className = 'input';
+    leftCell.appendChild(this.titleInput);
+    this.titleInput.addEventListener('keypress', function (evt) {
+        if (evt.which == 13) {
+            var value = this.titleInput.value.trim();
+            if (value) {
+                this.load(value);
+            }
+            return false;
+        }
+        return true;
+    }.bind(this));
+    this.itemsRoot = document.createElement('div');
+    this.itemsRoot.className = 'itemsRoot';
+    root.appendChild(this.itemsRoot);
+    this.events.on('change', function (evt) {
+        if (evt.remove) {
+            // Item removed - close all shown items
+            this.close(evt.item);
+            return;
+        };
+        if (evt.edit) {
+            var nl = this.itemsRoot.querySelectorAll('div[data-title="'+evt.title+'"][data-role="show"]');
+            if (nl.length>0) {
+                // Already shown - send 'hide' event
+                this.events.emit('hide', {title: evt.title}); // Old title
+                this.render(evt.item, nl[0], {});
+            }
+        }
+    }.bind(this));
+};
+
+$$.scrollToEl = function (el) {
+    if (!el) {
+        return;
+    };
+    window.scrollTo(window.scrollX, el.offsetTop);
+};
+
+$$.navigate = function(item) {
+    window.history.pushState({title: item.title}, item.title, '#'+item.title);
+    window.title = item.title;
+    var nl = this.itemsRoot.querySelectorAll('div[data-title="'+item.title+'"][data-role="show"]');
+    if (nl.length>0) {
+        // Already shown - scroll
+        this.scrollToEl(nl[0]);
+    };
+};
+
+$$.parseTagDef = function(text, from, to) {
+    var result = {params: {}};
+    var paramsFrom = from;
+    var endName = text.indexOf(' ', paramsFrom);
+    if (endName == -1 || endName>to) {
+            result.name = text.substring(from, to);
+            return result;
+    }
+    result.name = text.substring(paramsFrom, endName).trim();
+    paramsFrom = endName;
+    while(text.charAt(paramsFrom) == ' ') {
+        // Check ="
+        var paramValueStart = text.indexOf('="', paramsFrom);
+        if (paramValueStart == -1 || paramValueStart>to) {
+            $$.log('Invalid tmpl parameters start');
+            return null;
+        }
+        var paramValueEnd = this.skipPair(text, paramValueStart, '="', '"');
+        if (paramValueEnd == -1 || paramValueEnd>to) {
+            $$.log('Invalid tmpl parameters end');
+            return null;
+        }
+        var name = text.substring(paramsFrom, paramValueStart).trim();
+        var value = text.substring(paramValueStart+2, paramValueEnd-1);
+        paramsFrom = paramValueEnd;
+        result.params[name] = value;
+    }
+    return result;
+}
+
+$$.tmpl = function(text, data, item, reason) {
+//    $$.log('Parse tmpl', text, reason);
+    var st = '#{';
+    var ed = '"}';
+    var start = 0;
+    var result = '';
+    var found = -1;
+    while ((found = (text || '').indexOf(st, start)) != -1) {
+        var foundEnd = this.skipPair(text, found, st, ed);
+        if (-1 == foundEnd) {
+            $$.log('Not a pair');
+            return null;
+        }
+        var tagDef = this.parseTagDef(text, found+2, foundEnd);
+        if (!tagDef) {
+                $$.log('Invalid tmpl macro');
+                return null;
+        }
+        if (start<found) {
+            result += text.substring(start, found);
+        }
+//        $$.log('tmpl', macroName, params);
+        var macro = this.tmplOp[tagDef.name];
+        if (!macro) {
+            $$.log('Invalid macro', tagDef.name);
+        } else {
+            var value = macro.handler.call(this, tagDef.params, data, item);
+            if (result) {
+                result += value;
+            } else {
+                result = value;
+            }
+        }
+        start = foundEnd;
+    };
+    if (start<(text || '').length) {
+        result += text.substring(start);
+    }
+    return result;
+}
+
+$$.tmplOp = {};
+$$.tmplOp.each = {
+    handler: function (params, data, item) {
+        var result = '';
+        var items = this.tmpl(params.values || '', data, item, 'each items');
+//        $$.log('values:', items, items.length);
+        if (items && items.length>0) {
+            if (params.header) {
+                result += this.tmpl(params.header, data, item);
+            }
+            var name = this.tmpl(params.name || '', data, item, 'each name');
+            if (!name) {
+                $$.log('Invalid param name', name, params.name);
+                return '!err!';
+            }
+            if (params.groupTag) {
+                var tags = this.tmpl(params.groupTag, data, item);
+                if (!Array.isArray(tags)) tags = this.parseTags(tags);
+                for (var i = 0; i<tags.length; i++) {
+                    if (tags[i].startsWith('/')) {
+                        // RegExp
+                        tags[i] = new RegExp(tags[i].substring(1));
+                    } else {
+                        tags[i] = item.normalizeTag(tags[i]);
+                    }
+                };
+                var groups = [];
+                for (var i = 0; i<items.length; i++) {
+                    var tag = items[i].hasTag(tags) || '';
+                    var gr = null;
+                    for (var j = 0; j<groups.length; j++) {
+                        if (groups[j].tag == tag) {
+                            gr = groups[j];
+                            break;
+                        }
+                    }
+                    if (!gr) {
+                        gr = {tag: tag, items: []};
+                        if (!tag) {
+                            groups.splice(0, 0, gr);
+                        } else {
+                            groups.push(gr);
+                        }
+                    }
+                    gr.items.push(items[i]);
+                }
+                var groupTemplate = params.groupTemplate || '';
+                for (var j = 0; j<groups.length; j++) {
+                    var gr = groups[j];
+                    if (!gr.tag) {
+                        result += this.tmpl(params.noGroupTitle || '(no title)', data, item, 'each template');
+                    } else {
+                        data.tag = gr.tag;
+                        data.group = this.formatTag(gr.tag, item);
+                        result += this.tmpl(groupTemplate, data, item);
+                    }
+                    for (var i = 0; i<gr.items.length; i++) {
+                        data[name] = gr.items[i];
+                        result += this.tmpl(params.template || '', data, item, 'each template');
+                    }
+                }
+                return result;
+            }
+            for (var i = 0; i<items.length; i++) {
+                data[name] = items[i];
+                result += this.tmpl(params.template || '', data, item, 'each template');
+            }
+        }
+        return result;
+    }
+};
+$$.tmplOp.tmpl = {
+    handler: function (params, data, item) {
+        var template = '';
+        if (params.ref) {
+            var ref = this.tmpl(params.ref, data, item);
+            if (ref) {
+                var items = this.find({title: ref});
+                if (items.length == 0) {
+                    return '';
+                }
+                template = items[0].text;
+            }
+        } else {
+            template = this.tmpl(params.template, data, item);
+        }
+        return this.tmpl(template, data, item);
+    }
+};
+$$.createFindConfig = function (title, tags, filterOut, sort) {
+    var config = {
+    };
+    if (title) {
+        config.title = title;
+    };
+    if (tags) {
+        config.tags = this.parseTags(tags);
+    };
+    if (filterOut) {
+        config.filterOut = this.createOperationsFilter(filterOut, true);
+    }
+    if (sort) {
+        config.sort = this.createSorter(sort);
+    }
+    return config;
+}
+$$.tmplCreateFindConfig = function(params, data, item) {
+    var config = {
+    };
+    if (params.title) {
+        config.title = this.tmpl(params.title, data, item, 'find title');
+    };
+    if (params.tags) {
+        config.tags = this.tmpl(params.tags, data, item, 'find tags');
+    };
+    if (params.tagsOp) {
+        config.filterOut = this.parseTags(this.tmpl(params.tagsOp, data, item));
+    }
+    if (params.sort) {
+        config.sort = this.tmpl(params.sort, data, item, 'sort');
+    } else {
+        config.sort = '*title*';
+    }
+    return this.createFindConfig(config.title, config.tags, config.filterOut, config.sort);
+}
+
+$$.tmplOp.find = {
+    handler: function (params, data, item) {
+        var config = this.tmplCreateFindConfig(params, data, item);
+        var items = this.find(config);
+        if (!item['static'] && params.reload && this.tmpl(params.reload, data, item, 'watch')) {
+            // Subscribe to edit events
+            var hideEvent = function (evt) {
+                if (evt.title == item.title) {
+                    // Unsubscribe
+                    this.events.off('hide', hideEvent);
+                    this.events.off('change', changeEvent);
+                }
+            }.bind(this);
+            var changeEvent = function (evt) {
+                var ourCase = false;
+                for (var i = 0; i<items.length; i++) {
+                    if (items[i].title == evt.title) {
+                        // Changed item from our list
+                        ourCase = true;
+                        break;
+                    }
+                }
+                if (!ourCase) {
+                    // Check if item selectable by config
+                    config.title = evt.item.title;
+                    if (this.find(config).length>0) {
+                        ourCase = true;
+                    }
+                }
+                if (ourCase) {
+                    // Reload
+//                    $$.log('Reloading item', item);
+                    var opts = item.renderOptions || {};
+                    opts.navigate = false;
+                    this.open(item, opts);
+                }
+            }.bind(this);
+//            $$.log('Subscribing to change events');
+            this.events.on('hide', hideEvent);
+            this.events.on('change', changeEvent);
+        };
+        if (params.type) {
+            var result = [];
+            for (var i = 0; i<items.length; i++) {
+                if (params.type == 'title') {
+                    result.push(items[i].title);
+                }
+            }
+            return result;
+        }
+        return items;
+    }
+};
+
+$$.tmplOp.date = {
+    handler: function (params, data, item) {
+        var format = 'yyyy-mm-dd';
+        if (params.format) {
+            format = this.tmpl(params.format, data, item, 'date format');
+        }
+        var dt = new Date();
+        if (params.value) {
+            var value = this.tmpl(params.value, data, item, 'date value');
+            if (value && value.getTime) {
+                dt = value;
+            }
+        }
+        if (params.adjust) {
+            var adj = this.tmpl(params.adjust, data, item, 'data adj');
+            var rexp = /(\+|\-|\=)(\d+)(y|m|w|d|e)/g;
+            var def = {
+                y: {
+                    method: 'FullYear'
+                },
+                m: {
+                    handler: function(dt, mul, value) {
+                        if (mul == 0) {
+                            dt.setMonth(value-1);
+                        } else {
+                            dt.setMonth(dt.getMonth() + mul*value);
+                        }
+                    }
+                },
+                w: {
+                    handler: function(dt, mul, value) {
+                        if (mul == 0) {
+                            $$.log('Setting week not supported')
+                        } else {
+                            dt.setDate(dt.getDate() + 7*mul*value);
+                        }
+                    }
+                },
+                d: {
+                    method: 'Date'
+                },
+                e: {
+                    handler: function(dt, mul, value) {
+                        if (mul == 0) {
+                            var day = dt.getDay();
+                            dt.setDate(dt.getDate()+(value-day));
+                        } else {
+                            $$.log('Setting week day not supported')
+                        }
+                    }
+                }
+            }
+            var m = null;
+            while ((m = rexp.exec(adj))) {
+                var sign = m[1];
+                var val = parseInt(m[2]);
+                var type = m[3];
+                var op = def[type];
+                if (!op) {
+                    this.addMessage('Date adjustment not supportd: '+m[0], {err: true});
+                } else {
+                    var mul = '=' == sign? 0: ('-' == sign? -1: 1);
+                    if (op.method) {
+                        if (mul == 0) {
+                            dt['set'+op.method].call(dt, val);
+                        } else {
+                            var now = dt['get'+op.method].call(dt);
+                            dt['set'+op.method].call(dt, now+mul*val);
+                        }
+                    }
+                    if (op.handler) {
+                        op.handler(dt, mul, val);
+                    }
+                };
+            }
+        }
+        return dt.format(format);
+    }
+}
+
+$$.tmplOp.hasTag = {
+    handler: function (params, data, item) {
+        var value = item;
+        if (params.value) {
+            value = this.tmpl(params.value || '', data, item, 'out value');
+            if (!value || !value.tags) {
+                // Invalid value
+                return null;
+            }
+        }
+        var tags = this.tmpl(params.tag || params.tags, data, item, 'find tags');
+        if (!Array.isArray(tags)) {
+            tags = this.parseTags(tags);
+        }
+        var all = this.tmpl(params.all, data, item)? true: false;
+        var hasTag = value.hasTag(tags, all);
+        return hasTag || '';
+    }
+}
+
+$$.tmplOp.out = {
+    handler: function (params, data, item) {
+        var obj = data;
+//        $$.log('out in', params.value, '=', obj);
+        if (params.text) {
+            // Return text
+            return this.tmpl(params.text, data, item, 'out text');
+        }
+        var value = this.tmpl(params.value || '', data, item, 'out value');
+        var result = '';
+        if (!value) {
+            return '!err!';
+        };
+        var arr = value.split('.');
+        for (var i = 0; i<arr.length; i++) {
+            var res = obj[arr[i]];
+//            $$.log('arr', i, arr[i], res, typeof(res));
+            if (typeof(res) == 'object' && !res) {
+                // No value
+                return null;
+            }
+            obj = res;
+        }
+//        $$.log('out out', params.value, '=', obj);
+        return obj;
+    }
+}
+
+$$.wikifyStringRules = [];
+$$.wikifyStringRules.push({
+    start: '[[',
+    end: ']]',
+    parser: function (result, text, item) {
+        var protocols = ['http://', 'https://', 'file:///']
+        var link = text;
+        var linkTitle = link;
+        if (-1 != link.indexOf('|')) {
+            // Special link title
+            link = linkTitle.substring(0, linkTitle.indexOf('|'));
+            linkTitle = linkTitle.substring(linkTitle.indexOf('|')+1);
+        }
+        var external = false;
+        for (var i = 0; i < protocols.length; i++) {
+            if (link.indexOf(protocols[i]) == 0) {
+                // Found
+                external = true;
+                break;
+            };
+        };
+        result.push({type: 'link', content: linkTitle, link: link, external: external});
+    }
+}, {
+    start: '((',
+    end: '))',
+    parser: function (result, text, item) {
+        var link = text;
+        var linkTitle = link;
+        var delimPos = link.indexOf('|');
+        if (-1 != delimPos) {
+            // Special link title
+            link = linkTitle.substring(0, delimPos);
+            linkTitle = linkTitle.substring(delimPos+1);
+        };
+        result.push({type: 'embed-item', content: linkTitle, link: link});
+    }
+}, {
+    start: "''",
+    end: "''",
+    parser: function (result, text, item) {
+        var b = {type: 'b', children: []};
+        this.wikifyString(b.children, text, item);
+        result.push(b);
+    }
+}, {
+    start: "<<",
+    end: ">>",
+    parser: function (result, text, item) {
+        var tagDef = this.parseTagDef(text, 0, text.length);
+        if (!tagDef || !this.macro[tagDef.name]) {
+            $$.log('No macro', tagDef);
+            var el = {type: 'err', content: 'Macro'};
+            result.push(el);
+            return;
+        }
+        var macro = this.macro[tagDef.name];
+        var el = {type: 'macro', tag: tagDef};
+        if (macro.parser) {
+            var arr = [];
+            macro.parser.call(this, arr, tagDef.params, item);
+            el.children = arr;
+        };
+        result.push(el);
+    }
+}, {
+    start: "!",
+    end: "!",
+    parser: function (result, text, item) {
+        var el = {type: 'err', content: text};
+        result.push(el);
+    }
+}, {
+    start: "/",
+    end: "/",
+    accept: function (text, item) {
+        if (text.indexOf('|') != -1) {
+            // Have one more / inside
+            return true;
+        }
+        return false;
+    },
+    parser: function (result, text, item) {
+        var pos = text.indexOf('|');
+        var rb = text.substring(0, pos);
+        var rt = text.substring(pos+1);
+        var el = {type: 'ruby', rb: rb, rt: rt};
+        result.push(el);
+    }
+});
+$$.renderRules = [];
+$$.renderRules.push({
+    type: 'p',
+    render: function (value, parent, item) {
+        var p = this.el('p', parent, {});
+        this.renderOne(value.children, p, item);
+    }
+}, {
+    type: 'ruby',
+    render: function (value, parent, item) {
+        var el = this.el('ruby', parent, {});
+        this.el('rb', el, {}, value.rb);
+        this.el('rt', el, {}, value.rt);
+    }
+}, {
+    type: 'hr',
+    render: function (value, parent, item) {
+        this.el('hr', parent, {});
+    }
+}, {
+    type: 'box-class',
+    render: function (value, parent, item) {
+        var div = this.el('div', parent, {
+            'class': value.className
+        });
+        this.renderOne(value.children, div, item);
+    }
+}, {
+    type: 'column',
+    render: function (value, parent, item) {
+        var div = this.el('div', parent, {
+            'class': 'columnCell',
+            'style': 'width: '+value.width+'%;'
+        });
+        this.renderOne(value.children, div, item);
+    }
+}, {
+    type: 'columns',
+    render: function (value, parent, item) {
+        var div = this.el('div', parent, {
+            'class': 'columnsTable'
+        });
+        var row = this.el('div', div, {
+            'class': 'columnsRow'
+        });
+        this.renderOne(value.children, row, item);
+    }
+}, {
+    type: 'text',
+    render: function (value, parent, item) {
+        this.el('span', parent, {}, value.content);
+    }
+}, {
+    type: 'err',
+    render: function (value, parent, item) {
+        this.el('span', parent, {
+            'class': 'err'
+        }, value.content);
+    }
+}, {
+    type: 'b',
+    render: function (value, parent, item) {
+        var el = this.el('b', parent, {});
+        this.renderOne(value.children, el, item);
+    }
+}, {
+    type: 'macro',
+    render: function (value, parent, item) {
+        var macro = this.macro[value.tag.name];
+        if (!macro.render && value.children) {
+            // No special renderer
+            this.renderOne(value.children, parent, item);
+        } else {
+            if (macro.render) {
+                macro.render.call(this, value.tag.params, parent, item);
+            }
+        }
+    }
+}, {
+    type: 'link',
+    render: function (value, parent, item) {
+        if (value.external) {
+            // External link
+            var a = this.el('a', parent, {
+                href: value.link,
+                target: '_blank',
+                'class': 'pageLink externalLink'
+            }, value.content);
+        } else {
+            // Page link
+            var a = this.el('a', parent, {
+                href: '#'+value.link,
+                'class': 'pageLink'
+            }, value.content);
+            a.onclick = function(event){
+                this.load(value.link);
+                return false;
+            }.bind(this);
+        }
+    }
+}, {
+    type: 'embed-item',
+    render: function (value, parent, item) {
+        var visible = false;
+        var span = this.el('div', parent, {
+            'class': 'embedItemLink'
+        }, value.content);
+        var contentDiv = this.el('div', parent, {
+            'class': 'embedItemContent'
+        });
+        contentDiv.style.display = 'none';
+        span.onclick = function(event){
+            if (visible) {
+                contentDiv.style.display = 'none';
+                visible = false;
+            } else {
+                var items = this.find({title: value.link});
+                if (items.length == 0) {
+                    $$.log('No item:', value.link);
+                    return false;
+                }
+                var item = items[0];
+                contentDiv.innerHTML = '';
+                contentDiv.style.display = 'block';
+                this.show(item, {parent: contentDiv, nobottom: true, notitle: true, itemClass: 'embedItem', 'static': true});
+                visible = true;
+            }
+            return false;
+        }.bind(this);
+    }
+}, {
+    type: 'h1',
+    render: function (value, parent, item) {
+        var el = this.el('h1', parent, {});
+        this.renderOne(value.children, el, item);
+    }
+}, {
+    type: 'li',
+    render: function (value, parent, item) {
+        if (value.start) {
+            parent = this.el(value.start == '#'? 'ol': 'ul', parent);
+        }
+        var el = this.el('li', parent, {});
+        this.renderOne(value.children, el, item);
+    }
+}, {
+    type: 'h2',
+    render: function (value, parent, item) {
+        var el = this.el('h2', parent, {});
+        this.renderOne(value.children, el, item);
+    }
+}, {
+    type: 'h3',
+    render: function (value, parent, item) {
+        var el = this.el('h3', parent, {});
+        this.renderOne(value.children, el, item);
+    }
+}, {
+    type: 'code-block',
+    render: function (value, parent, item) {
+        var el = this.el('pre', parent, {
+            'class': 'codeBlock'
+        }, value.content);
+    }
+});
+
+$$.newTitle = function(title) {
+    var index = 1;
+    var checkTitle = ''+title;
+    do {
+        if (checkTitle && this.find({title: checkTitle}) == 0) {
+            return checkTitle.trim();
+        }
+        checkTitle = ''+title+'('+(index++)+')';
+    } while (true);
+}
+
+$$.macro = {};
+
+$$.macro.removeItem = {
+    render: function (value, parent, item) {
+        var a = this.el('a', parent, {
+            href: '#',
+            'class': 'pageLink removeLink',
+            'title': 'New item with: '+value.tags
+        }, value.text || 'Remove');
+        var items = [item];
+        if (value.title || value.tags || value.tagsOp) {
+            items = this.find(this.createFindConfig(value.title, value.tags, value.tagsOp));
+        };
+        a.addEventListener('click', function(evt) {
+            var promtText = 'Remove items ['+items.length+']?';
+            if (items.length == 1) {
+                promtText = 'Remove item ['+items[0].title+']?'
+            };
+            if (confirm(promtText)) {
+                for (var i = 0; i<items.length; i++) {
+                    this.remove(item.title);
+                }
+            };
+            evt.preventDefault();
+            return false;
+        }.bind(this));
+    }
+};
+
+$$.macro.newItem = {
+    render: function (value, parent, item) {
+        var a = this.el('a', parent, {
+            href: '#',
+            'class': 'pageLink',
+            'title': 'New item with: '+value.tags
+        }, value.text || 'New item');
+        a.onclick = function(event){
+            var title = prompt('Enter new item title:');
+            if (!title) {
+                return false;
+            }
+            title = this.newTitle(title);
+            // Ensure title is unique
+            var err = this.update(title, title, '', value.tags);
+            if (!err) {
+                this.load(title);
+            }
+//            this.load(value.link);
+            return false;
+        }.bind(this);
+    }
+}; // Shows newItem dialog
+
+$$.macro.openItem = {
+    render: function (value, parent, item) {
+        var a = this.el('a', parent, {
+            href: '#'+value.title,
+            'class': 'pageLink'
+        }, value.text || value.title || 'Open item');
+        a.onclick = function(event) {
+            this.load(value.title, {tags: value.tags});
+            return false;
+        }.bind(this);
+    }
+}; // Shows newItem dialog
+$$.macro.tmpl = {
+    parser: function (result, params, item) {
+        var tmpl = params.tmpl || '';
+        var ref = params.ref;
+        if (ref) {
+            var items = this.find({title: ref});
+            if (items.length>0) {
+                tmpl = items[0].text;
+            }
+        }
+        var content = this.tmpl(tmpl, {item: item, params: params}, item, 'macro');
+        if (params.lines) {
+            var lines = content.split('\n');
+            this.wikifyLines(result, lines, item);
+        } else {
+            this.wikifyString(result, content, item);
+        }
+    }
+}; // Inserts template
+$$.macro.timeline = {
+    parser: function (result, params, item) {
+        var days = 180;
+        var maxItems = 1000;
+        if (params.days) {
+            days = parseInt(params.days) || days;
+        }
+        if (params.max) {
+            maxItems = parseInt(params.max) || maxItems;
+        }
+        var dateFormat = params.format || 'yyyy-mm-dd';
+        var unix = new Date();
+        var unixFrom = unix.getTime();
+        var unixTo = new Date(unixFrom);
+        unixTo.setDate(unix.getDate()-days);
+        unixTo = unixTo.getTime();
+        var items = this.find({
+            filter: function (el) {
+                var tm = parseInt(el.getAttribute('data-edited'));
+                if (tm>unixTo && tm<unixFrom) {
+                    return true;
+                }
+                return false;
+            },
+            sort: function(a, b) {
+                if (!a.edited || !b.edited) return 0;
+                return b.edited.getTime()-a.edited.getTime();
+            }
+        });
+        var content = [];
+        var title = '';
+//        $$.log('timeline parser', params, items.length);
+        for (var i = 0; i<Math.min(items.length, maxItems); i++) {
+            var itm = items[i];
+            var t = itm.edited.format(dateFormat);
+            if (t != title) {
+                title = t;
+                content.push('!!! '+t);
+            };
+            content.push('[['+itm.title+']]');
+            content.push('');
+        }
+        this.wikifyLines(result, content, item);
+    }
+};
+$$.renderOne = function(children, parent, item) {
+    for (var i = 0; i<children.length; i++) {
+        var value = children[i];
+        var found = false;
+        for (var j = 0; j<this.renderRules.length; j++) {
+            var r = this.renderRules[j];
+            if (value.type == r.type) {
+                r.render.call(this, value, parent, item);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            this.log('!!! Not found:', value);
+        }
+    };
+};
+
+$$.wikifyString = function(result, text, item, start) {
+    if (!text) {
+        return;
+    }
+    var addToResult = function (arr) {
+        for (var i = 0; i<arr.length; i++) {
+            result.push(arr[i]);
+        };
+    };
+    for (var idx = (start || 0); idx<this.wikifyStringRules.length; idx++) {
+        var rule = this.wikifyStringRules[idx];
+        var i = text.indexOf(rule.start);
+        if(-1 != i) { // Have link
+            var end = text.indexOf(rule.end, i+1+rule.start.length);
+            if (-1 != end) {
+                // Found link
+                var content = text.substring(i+rule.start.length, end);
+                if (rule.accept && !rule.accept.call(this, content, item)) {
+                    continue;
+                }
+                this.wikifyString(result, text.substring(0, i), item, idx+1);
+                rule.parser.call(this, result, content, item);
+                this.wikifyString(result, text.substring(end+rule.end.length), item);
+                return;
+            }
+        }
+    };
+    result.push({type: 'text', content: text});
+};
+
+$$.skipBlock = function (lines, from, start, end) {
+    var isLine = function(line, patt) {
+        if (typeof(patt) == 'string') {
+            return line == patt;
+        }
+        if (!patt) {
+            return false;
+        }
+        if (patt.exec) {
+            return patt.exec(line) ? true: false;
+        }
+        return false;
+    }
+    var deep = 1;
+    for (var i = from; i<lines.length; i++) {
+        var line = lines[i];
+        if (isLine(line, start)) {
+            deep++;
+            continue;
+        }
+        if (isLine(line, end)) {
+            deep--;
+            if (deep == 0) {
+                return i;
+            }
+            continue;
+        }
+    }
+    return -1;
+};
+
+$$.classBlockReg = /^@@(.+)$/;
+
+$$.wikifyLines = function(result, lines, item) {
+    var p = {type: 'p', children: []};
+    result.push(p);
+    var stack = [];
+    for (var index = 0; index<lines.length; index++) {
+        var line = lines[index].trim();
+        if (!line) {
+            // Paragraph
+            p = {type: 'p', children: []};
+            result.push(p);
+            stack = [];
+            continue;
+        };
+        if ('---' == line) {
+            p.children.push({type: 'hr'});
+            continue;
+        }
+        var m = this.classBlockReg.exec(line);
+        if (m) {
+            var className = m[1];
+            var endBlock = this.skipBlock(lines, index+1, this.classBlockReg, '@@');
+            if (endBlock != -1) {
+                var blockLines = [];
+                for (var i = index+1; i<endBlock; i++) {
+                    blockLines.push(lines[i]);
+                }
+                var box = {type: 'box-class', className: className, children: []};
+                this.wikifyLines(box.children, blockLines, item);
+                p.children.push(box);
+                index = endBlock;
+                continue;
+            }
+        }
+        if ('||' == line) {
+            var endBlock = this.skipBlock(lines, index+1, null, '||');
+            if (endBlock != -1) {
+                var blockLines = [];
+                var blocks = [];
+                for (var i = index+1; i<endBlock; i++) {
+                    if ('|' == lines[i]) {
+                        blocks.push(blockLines);
+                        blockLines = [];
+                        continue;
+                    }
+                    blockLines.push(lines[i]);
+                }
+                if (blockLines.length>0) {
+                    blocks.push(blockLines);
+                }
+                var box = {type: 'columns', className: className, children: []};
+                var width = 0;
+                if (blocks.length>0) {
+                    width = Math.floor(100 / blocks.length);
+                }
+                for (var i = 0; i<blocks.length; i++) {
+                    var cell = {type: 'column', children: [], width: width};
+                    box.children.push(cell);
+                    this.wikifyLines(cell.children, blocks[i], item);
+
+                }
+                p.children.push(box);
+                index = endBlock;
+                continue;
+            }
+        }
+        if ('{{{' == line) {
+            // Code block
+            var found = false;
+            for (var i = index+1; i<lines.length; i++) {
+                if (lines[i] == '}}}') {
+                    // Create pre block
+                    var content = '';
+                    for (var j = index+1; j<i; j++) {
+                        content += lines[j]+'\n';
+                    };
+                    p.children.push({type: 'code-block', content: content});
+                    index += i+1;
+                    found = true;
+                    break;
+                };
+            };
+            if (found) {
+                stack = [];
+                continue;
+            }
+        }
+        this.wikifyLine(p.children, line, item, stack);
+    };
+}
+
+$$.wikifyLine = function(result, line, item, stack) {
+    var box = null;
+    var container = result;
+    var string = '';
+    var clearStack = true;
+    if (line.startsWith('! ')){
+        box = {type: 'h1', children: []};
+        string = line.substring(2);
+    }
+    if (line.startsWith('!! ')){
+        box = {type: 'h2', children: []};
+        string = line.substring(3);
+    }
+    if (line.startsWith('!!! ')){
+        box = {type: 'h3', children: []};
+        string = line.substring(4);
+    }
+    if (line.startsWith('*') || line.startsWith('#')) {
+        clearStack = false;
+        var spacePos = line.indexOf(' ');
+        if (spacePos>0) {
+            string = line.substring(spacePos+1);
+            // Have some combination of *#
+            var chars = line.substr(0, spacePos);
+            while(chars.length<stack.length) {
+                stack.pop();
+            };
+            if (chars.length == stack.length) {
+                // Same level
+                if (chars == stack[stack.length-1].chars) {
+                    // OK, same level, same marker
+                    container = stack[stack.length-1].container;
+                    box = {type: 'li', children: []};
+                } else {
+                    // Chars different - one try - pop from stack
+                    stack.pop();
+                }
+            }
+            if (chars.length == stack.length+1) {
+                // New level
+                if (stack.length>0 && chars.substr(0, chars.length-1) != stack[stack.length-1].chars) {
+                    // Stack have items and parent is wrong
+                    clearStack = true;
+                } else {
+                    if (stack.length>0) {
+                        container = stack[stack.length-1].container;
+                    }
+                    // New level
+                    box = {type: 'li', children: [], start: chars.charAt(chars.length-1)};
+                    stack.push({box: box, chars: chars, container: box.children}); // Put new level
+                }
+            }
+        } else {
+            clearStack = true; // No space - invalid list
+        }
+    }
+    if (clearStack) {
+        while (stack.length>0) {
+            stack.pop();
+        }
+    }
+    if (box) {
+        container.push(box);
+        this.wikifyString(box.children, string, item);
+    } else {
+        this.wikifyString(container, line+' ', item);
+    }
+};
+
+$$.wikify = function(text, item, options) {
+    var lines = text.split('\n');
+    var result = [];
+    $$.wikifyLines(result, lines, item);
+    var root = document.createElement('div');
+    this.renderOne(result, root, item);
+    return root;
+};
+
+$$.edit = function(item, options) {
+    if (options) {
+        options = {};
+    };
+    var div;
+    var nl = this.itemsRoot.querySelectorAll('div[data-title="'+item.title+'"][data-role="edit"]');
+    if (nl.length>0) {
+        div = nl[0];
+    } else { // Create editor
+        div = this.el('div', null, {
+            'class': 'itemEditor',
+            'data-role': 'edit',
+            'data-title': item.title
+        });
+        var wrap = this.el('div', div, {
+            'class': 'inputWrap'
+        });
+        this.el('label', wrap, {}, 'Title');
+        var titleEdit = this.el('input', wrap, {
+            'data-editor': 'title',
+            'class': 'input',
+            type: 'text'
+        });
+        if (!this.titleEditable(item)) {
+            titleEdit.setAttribute('readonly', 'true');
+        }
+        titleEdit.addEventListener('keypress', function (evt) {
+            if (evt.which == 13) {
+                saveHandler();
+                return false;
+            }
+            return true;
+        }.bind(this));
+        wrap = this.el('div', div, {
+            'class': 'inputWrap'
+        });
+        this.el('label', wrap, {}, 'Content');
+        var contentEdit = this.el('textarea', wrap, {
+            'data-editor': 'content',
+            'class': 'inputArea'
+        });
+        contentEdit.addEventListener('keypress', function (evt) {
+            if (evt.which == 13 && evt.ctrlKey) {
+                saveHandler();
+                return false;
+            }
+            return true;
+        }.bind(this));
+        wrap = this.el('div', div, {
+            'class': 'inputWrap'
+        });
+        this.el('label', wrap, {}, 'Tags');
+        var tagsEdit = this.el('input', wrap, {
+            'data-editor': 'tags',
+            'class': 'input',
+            type: 'text'
+        });
+        tagsEdit.addEventListener('keypress', function (evt) {
+            if (evt.which == 13) {
+                saveHandler();
+                return false;
+            }
+            return true;
+        }.bind(this));
+        wrap = this.el('div', div, {
+            'class': 'inputWrap'
+        });
+        var saveButton = this.el('button', wrap, {
+            'data-editor': 'save',
+            'class': 'editButton'
+        }, 'Save');
+        var saveHandler = function() {
+            var title = titleEdit.value;
+            var content = contentEdit.value;
+            var tags = tagsEdit.value;
+            var err = this.update(item.title, title, content, tags);
+//            $$.log('Save', title, content, tags, err);
+            if (!err) {
+                div.parentNode.removeChild(div);
+            };
+        }.bind(this);
+        saveButton.onclick = saveHandler;
+        var cancelButton = this.el('button', wrap, {
+            'data-editor': 'cancel',
+            'class': 'editButton'
+        }, 'Cancel');
+        nl = this.itemsRoot.querySelectorAll('div[data-title="'+item.title+'"][data-role="show"]');
+        if (nl.length>0 && nl[0].nextSibling) {
+            this.itemsRoot.insertBefore(div, nl[0].nextSibling);
+        } else {
+            // Append to end
+            this.itemsRoot.appendChild(div);
+        }
+        titleEdit.value = item.title;
+        contentEdit.value = item.text || '';
+        tagsEdit.value = item.tags.join(' ');
+        cancelButton.onclick = function (event) {
+            div.parentNode.removeChild(div);
+        }.bind(this);
+    };
+    this.scrollToEl(div);
+    var areas = div.querySelectorAll('textarea');
+    if (areas.length>0) {
+        areas[0].focus();
+        areas[0].select();
+    }
+};
+
+$$.systemPlugins = ['systemStyle', 'systemTemplate', 'systemPlugin'];
+
+$$.titleEditable = function(item, options) {
+    if (item.hasTag(this.systemPlugins)) {
+        return false;
+    }
+    return true;
+}
+
+$$.fillTemplate = function(item, options) {
+    if (item.hasTag(this.systemPlugins)) {
+        options.templateRef = 'SystemTemplate';
+    }
+};
+
+$$.close = function(item) {
+    var nl = this.itemsRoot.querySelectorAll('div[data-title="'+item.title+'"][data-role="show"]');
+    for (var i = 0; i<nl.length; i++) {
+        nl[i].parentNode.removeChild(nl[i]);
+    };
+    this.events.emit('close', {title: item.title});
+    this.events.emit('hide', {title: item.title});
+};
+
+$$.render = function(item, div, options) {
+    this.fillTemplate(item, options);
+    var tmpl = '';
+    if (options.template) {
+        tmpl = options.template;
+    }
+    if (options.templateRef) {
+        // Search for templateRef
+        var arr = this.find({title: options.templateRef});
+        if (arr.length>0) {
+            tmpl = arr[0].text;
+        }
+    }
+    if (options['static']) {
+        item['static'] = true; // Don't subscribe to events
+    }
+    item.renderOptions = options;
+    div.innerHTML = '';
+    div.setAttribute('data-title', item.title);
+    div.setAttribute('data-role', 'show');
+    div.ondblclick = function (event) {
+        $$.edit(item);
+        event.stopPropagation();
+    }.bind(this);
+    if (!options.notitle) {
+        var titleDiv = document.createElement('div');
+        titleDiv.className = 'itemTitle';
+        titleDiv.appendChild(document.createTextNode(item.title));
+        var titleButtons = document.createElement('div');
+        titleButtons.className = 'itemTitleButtons';
+        var editButton = this.el('button', titleButtons, {
+            'class': 'titleButton'
+        }, 'Edit');
+        editButton.onclick = function(event) {
+            $$.edit(item);
+        }.bind(this);
+        var removeButton = this.el('button', titleButtons, {
+            'class': 'titleButton'
+        }, 'Remove');
+        removeButton.onclick = function(event) {
+            if (confirm('Remove item ['+item.title+']?')) {
+                this.remove(item.title);
+            }
+        }.bind(this);
+        var closeButton = this.el('button', titleButtons, {
+            'class': 'titleButton'
+        }, 'Close');
+        closeButton.onclick = function(event){
+            this.close(item);
+        }.bind(this);
+        div.appendChild(titleDiv);
+        div.appendChild(titleButtons);
+    }
+    var contentDiv = document.createElement('div');
+    contentDiv.className = 'itemContent';
+    var text = item.text;
+    if (tmpl) {
+        text = this.tmpl(tmpl, {
+            item: item,
+            options: options
+        }, item, 'template itself');
+    }
+    contentDiv.appendChild(this.wikify(text || '', item, options));
+    div.appendChild(contentDiv);
+    if (!options.nobottom) {
+        var bottomDiv = this.el('div', div, {
+            'class': 'itemBottom'
+        });
+        var times = '';
+        if (item.created) {
+            times +=''+item.created.format(this.shortDateTime);
+        }
+        if (item.edited) {
+            times +=' '+item.edited.format(this.shortDateTime);
+        }
+        this.el('div', bottomDiv, {
+            'class': 'itemTimes'
+        }, times);
+        var tagsDiv = this.el('div', bottomDiv, {
+            'class': 'itemTags'
+        });
+        if (item.tags) {
+            // Render tags
+            for (var i = 0; i<item.tags.length; i++) {
+                var tag = item.tags[i];
+                this.renderTag(item, tag, tagsDiv);
+            }
+        }
+        this.el('div', bottomDiv, {style: 'clear: both;'});
+    }
+};
+
+$$.formatTag = function(tag, item) {
+    if (tag.startsWith('[') && tag.endsWith(']')) {
+        return tag.substr(1, tag.length-2);
+    }
+    return tag;
+}
+
+$$.tagClick = function(item, tag, tagCaption, div) {
+    this.load("Tagged by '"+tagCaption+"'", {
+        templateRef: 'ByTagTemplate',
+        tag: tag
+    });
+
+}
+
+$$.renderTag = function(item, tag, parent) {
+    var tagCaption = this.formatTag(tag, item);
+    if (!tagCaption) { // No caption - no tag
+        return;
+    }
+    var div = this.el('div', parent, {
+        'class': 'itemTag'
+    }, tagCaption);
+    div.addEventListener('click', function() {
+        this.tagClick(item, tag, tagCaption, div);
+        return false;
+    }.bind(this));
+}
+
+$$.show = function(item, options) {
+    var div = document.createElement('div');
+    div.className = options.itemClass || 'item';
+    (options.parent || this.itemsRoot).appendChild(div);
+    this.render(item, div, options);
+};
+
+$$.load = function(title, options) {
+    if (!options) options = {};
+    var items = this.find({
+        title: title
+    });
+    options.navigate = true;
+    if (items.length>0) {
+        // Existing item
+        this.open(items[0], options);
+    } else { // New items
+        if (options.nocreate) {
+            // Don't create new
+            return;
+        }
+        var item = new this.itemPrototype();
+        item.title = title;
+        item.text = 'No content';
+        item.tags = this.parseTags(options.tags);
+        this.open(item, options);
+    };
+};
+
+$$.open = function(item, options) {
+    if (!options) {
+        options = {};
+    }
+    var nl = this.itemsRoot.querySelectorAll('div[data-title="'+(options.replaces || item.title)+'"][data-role="show"]');
+    if (nl.length>0 && !options.parent) {
+        // Already shown - send 'hide' event
+        this.events.emit('hide', {title: item.title}); // Old title
+        // Re-render?
+        this.render(item, nl[0], options);
+        if (options.navigate) {
+            // Need to focus
+            this.navigate(item);
+        };
+        return;
+    };
+    // Show
+    // this.events.emit('show', {title: item.title, item: item}); // Item is shown
+    this.show(item, options);
+    if (options.navigate) {
+        // Need to focus
+        this.navigate(item);
+    };
+};
+
+$$.showStartup = function() {
+    $$.find({
+        tags: 'startup'
+    }, function(item) {
+        this.open(item);
+    }.bind(this));
+    if (window.location.hash) {
+        $$.load(window.location.hash.substring(1), {nocreate: true});
+    }
+};
+
+$$.events.on('start', function() {
+    $$.initUI();
+    $$.showStartup();
+});
+
+$$.events.on('updated', function(evt) {
+    if (evt.err) {
+        this.addMessage(evt.err, {err: true});
+    }
+});
+
+$$.pluginLoaded('CorePlugin');--></item><item data-file="core.css" data-tags="systemStyle" data-title="CoreCSS"><!--body {
+    padding: 0;
+    margin: 0;
+    overflow: scroll;
+    font-size: 0.9em;
+    font-family: Sans-Serif;
+    height: 100%;
+}
+
+.root {
+    max-width: 100%;
+    width: 800px;
+}
+
+.messages {
+    position: fixed;
+    left: 10px;
+    top: 0px;
+    width: 200px;
+}
+
+.message {
+    text-align: center;
+    padding: 0.5em;
+    margin-top: 0.1em;
+    background-color: #00aa88;
+    color: #ffffff;
+    text-shadow: #222222 1px 1px 2px;
+    font-size: 0.8em;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.errorMessage {
+    background-color: #aa0000;
+}
+
+.fade {
+    animation-duration: 5s;
+    animation-name: fade;
+}
+
+@keyframes fade {
+    from {
+        opacity: 1.0;
+    }
+    to {
+        opacity: 0.0;
+    }
+}
+
+.configButton {
+    margin-left: 1em;
+}
+
+.notShown {
+    display: none;
+}
+
+.inputWrap {
+    margin: 0.2em;
+}
+
+.input {
+    width: 100%;
+    margin: 0;
+    padding: 0.2em;
+    font-size: 1em;
+    font-family: Sans-Serif;
+}
+
+.inputArea {
+    width: 100%;
+    margin: 0;
+    padding: 0.2em;
+    height: 150px;
+    font-size: 1em;
+    font-family: Sans-Serif;
+}
+
+.itemsRoot {
+}
+
+.item {
+    margin-bottom: 0.5em;
+    margin-left: 0.5em;
+    background-color: #ffffff;
+    padding: 0.5em;
+    border: 1px solid #aaaaaa;
+    box-shadow: 1px 1px 2px #cccccc;
+}
+
+.itemTitle {
+    font-weight: bold;
+    font-size: 1.3em;
+    float: left;
+}
+
+.itemTitleButtons {
+    float: right;
+}
+
+.itemContent {
+    clear: both;
+}
+
+.itemContent ruby {
+    display: inline-table;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.itemContent rb {
+    display: table-row-group;
+}
+
+.itemContent rt {
+    display: table-header-group;
+}
+
+.itemContent p {
+    margin: 0;
+    padding: 0;
+    margin-bottom: 0.2em;
+    margin-top: 0.2em;
+}
+
+.itemContent ul {
+    padding: 0;
+    margin: 0;
+    margin-left: 1em;
+    margin-top: 0.2em;
+    margin-bottom: 0.2em;
+}
+
+.itemContent ol {
+    padding: 0;
+    margin: 0;
+    margin-left: 1.3em;
+}
+
+.itemContent li {
+    margin: 0;
+    padding: 0;
+}
+
+.itemContent hr {
+    border: 0px;
+    border-top: 1px dashed #aaaaaa;
+}
+
+.itemContent h1, h2, h3 {
+    margin: 0;
+    padding: 0;
+    margin-bottom: 0.2em;
+    margin-top: 0.2em;
+    font-weight: bold;
+}
+
+.itemContent h1 {
+    font-size: 1.2em;
+}
+
+.itemContent h2 {
+    font-size: 1.15em;
+}
+
+.itemContent h3 {
+    font-size: 1.1em;
+}
+
+.itemContent .err {
+    font-weight: bold;
+    color: #ff0000;
+}
+
+.itemContent pre.codeBlock {
+    border: 1px dashed #cccccc;
+    padding: 0.5em;
+    font-family: monospace;
+    margin: 0;
+    overflow: auto;
+    max-height: 300px;
+}
+
+.pageLink {
+    color: #336699;
+    font-weight: bold;
+}
+
+.itemEditor {
+    margin-bottom: 0.5em;
+    background-color: #ffffff;
+    padding: 0.5em;
+    border: 1px solid #aaaaaa;
+    box-shadow: 1px 1px 2px #888888;
+}
+
+button {
+    font-size: 0.8em;
+    padding: 0.1em;
+    margin: 0.1em;
+}
+
+.itemTimes {
+    color: #aaaaaa;
+    font-size: 0.8em;
+    font-weight: bold;
+    float: left;
+}
+
+.itemBottom {
+    clear: both;
+}
+
+.itemTags {
+    float: right;
+}
+
+.itemTag {
+    padding: 0.1em 0.3em;
+    margin-left: 0.2em;
+    background-color: #cccccc;
+    white-space: nowrap;
+    border: 1px solid #aaaaaa;
+    border-radius: 0.5em;
+    float: right;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.itemTag:active {
+    background-color: #88bbee;
+}
+
+.rightPanelFlow {
+    position: absolute;
+    width: 250px;
+    right: 0.5em;
+    top: 0.5em;
+}
+
+.embedItemLink {
+    display: inline-block;
+    padding: 0.1em;
+    border-bottom: 2px solid #aaaaaa;
+    cursor: pointer;
+}
+
+.embedItemLink:active {
+    background-color: #88bbee;
+}
+
+.embedItemContent {
+}
+
+.embedItem {
+    margin-bottom: 0.2em;
+    padding: 0.2em;
+    border-bottom: 1px solid #aaaaaa;
+}
+
+.columnsTable {
+    display: table;
+    width: 100%;
+}
+
+.columnsRow {
+    display: table-row;
+}
+
+.columnCell {
+    display: table-cell;
+    padding: 0 0.2em;
+}
+
+.removeLink {
+    color: #aa0000;
+}--></item><item data-title="Another link" data-tags=""><!--Already here zzzz--></item><item data-title="With new text" data-tags=""><!--Not exist yet! Some text--></item><item data-tags="aa bb ccc abc" data-title="Template engine" data-edited="1348530805085"><!--Use smth. like
+{{{
+#{each name="itm" values="#{find tags="xxx"}" template="
+[[#{out value="item.title"}]]
+
+"}
+}}}--></item><item data-edited="1348495127004" data-tags="" data-title="Right panel"><!--Need some ideas for ''right panel'':--></item><item data-created="1348465912709" data-title="Test" data-edited="1348465912709" data-tags=""><!--Not exist yet!--></item><item data-created="1348469141003" data-title="ByTagTemplate" data-edited="1348815949058" data-tags="systemTemplate"><!--!! New item <<newItem tags="#{out value="options.tag"}" text="[+]">>
+#{each name="itm" values="#{find reload="yes" sort="*title*" tags="#{out value="options.tag"}"}" template="
+[[#{out value="itm.title"}]]
+
+"}--></item><item data-tags="systemTemplate" data-edited="1348539050448" data-title="SystemTemplate" data-created="1348474922044"><!--#{out text="{{{
+#{out value="item.text"}
+}}}"}--></item><item data-tags="Daily at:2012-09-24" data-edited="1348552300728" data-title="Daily 12-09-24" data-created="1348477835471"><!--[+] Money
+
+[-] Documents for tommorow - immigration later
+
+[+] Send screenshot
+
+[+] What's wrong with SSL--></item><item data-file="right.js" data-tags="systemPlugin" data-edited="1348494436979" data-title="RightPanePlugin" data-created="1348494436978"><!--$$.initRightPanel = function () {
+    this.rightPanelWidth = 250;
+    this.rightPanelFlow = true;
+    this.rightPanelDiv = this.el('div', document.body, {
+        'class': 'rightPanelFlow'
+    });
+    var items = this.find({tags: 'rightPanel'});
+    for (var i = 0; i<items.length; i++) {
+        this.open(items[i], {
+            parent: this.rightPanelDiv,
+            notitle: true,
+            nobottom: true,
+            'static': true
+        });
+    }
+    window.addEventListener('resize', function() {
+        this.reflowRightPanel();
+    }.bind(this));
+    setTimeout(function (){
+        this.reflowRightPanel();
+    }.bind(this), 0)
+};
+
+$$.reflowRightPanel = function() {
+    var winWidth = document.body.clientWidth;
+    var contentDiv = document.body.querySelectorAll('div.root')[0];
+    var contentWidth = contentDiv.offsetWidth;
+    var contentLeft = contentDiv.offsetLeft;
+    if (winWidth-contentWidth-contentLeft>this.rightPanelWidth) {
+        if (!this.rightPanelFlow) {
+            this.rightPanelFlow = true;
+            this.rightPanelDiv.className = 'rightPanelFlow';
+            document.body.appendChild(this.rightPanelDiv);
+        }
+    } else {
+        if (this.rightPanelFlow) {
+            this.rightPanelFlow = false;
+            this.rightPanelDiv.className = 'rightPanel';
+            this.itemsRoot.parentNode.insertBefore(this.rightPanelDiv, this.itemsRoot);
+        }
+    }
+};
+
+$$.events.on('start', function() {
+    $$.initRightPanel();
+});
+
+$$.pluginLoaded('RightPanelPlugin');
+--></item><item data-created="1348528853687" data-title="Daily 12-09-25" data-edited="1348575984738" data-tags="Daily at:2012-09-25"><!--!! Schedule
+* Weekly
+!! Tasks
+* [[Birt problem]] - still in progress
+* NRS implementations - not for today, all power to Dove-R
+--></item><item data-tags="rightPanel" data-edited="1349065540393" data-title="RightPanel" data-created="1348529585179"><!--<<tmpl ref="WeeklyLinkTemplate">>
+
+<<tmpl ref="DailyLinkTemplate">>
+
+<<tmpl ref="DailyLinkTemplate" days="+1d">>
+
+((Quick Add|Workflow))
+
+((Timeline))--></item><item data-created="1348534590922" data-title="Quick Links" data-edited="1348625972332" data-tags=""><!--!Not implemented!--></item><item data-tags="" data-edited="1348538830580" data-title="Timeline" data-created="1348536709222"><!--<<timeline days="14" max="50" format="m/d">>--></item><item data-tags="Dove-R @Sagara @Nakagawa" data-edited="1348642279121" data-title="Birt problem" data-created="1348549041723"><!--Remove headers, footers, page breaks from XLS exports
+
+!! Steps:
+# Update code to latest OK
+# Install latest build OK
+# Add enough devices to build report OK
+# Test all possible emitter config (use ExcelRenderStrategy)
+The problem is XLS emitter doesn't show any data, most likely it's a RenderTask problem
+!! Next tasks
+# Run dev env. NG, something broken
+# Fix load method OK
+# If it doesn't work try to fix from Emitter
+Current status: layout actually is not executed. Content comes to Emitter, but not Layout -> nothing to render
+
+!! Yea baby! fixed by modifying source code and adding special renderer for no-paging render option
+
+[[Birt problem response]]--></item><item data-tags="systemTemplate agileConfig" data-edited="1348648675960" data-title="DailyLinkTemplate" data-created="1348553447253"><!--<<openItem title="Daily #{date format="yy-mm-dd" adjust="#{out value="params.days"}"}" tags="Daily at:#{date format="yyyy-mm-dd" adjust="#{out value="params.days"}"}">>--></item><item data-tags="Daily at:2012-09-26" data-edited="1348615726564" data-title="Daily 12-09-26" data-created="1348615259947"><!--!!! Schedule
+* 9:30a Birdie-C meeting
+!!! Tasks
+* Dove-R [[Birt problem]]--></item><item data-tags="" data-edited="1348643039397" data-title="Birt problem response" data-created="1348643039396"><!--Frank,
+
+Filnally issue is fixed. Report in Excel format has no page headers/footers (easy part) and page breaks (hard). SVN rev. #20139
+
+The origin of page breaks problem is in Platform/RSPlatform/plugins/org.uguess.birt.report.engine.emitter.xls_2.5.2.201107181644/plugin.xml config file. Correct pagination value should be "no-pagination".
+
+Next problem: "no-pagination" doesn't work for Tribix XLS Emitter we use now. Actually, it comes from Emitter implementation, Emitter doesn't layout report contents by it self (like other emitters do) but rely on layout generated by LayoutEngine (LayoutEngine is Emitter also and Emitters are chainable). In Birt source code you can find, that LayoutEngine is used only when pagination="paper-size-pagination", I guess it's for laying out report components by pages.
+
+There is no other way to fix it other than creating own RenderTask and add special case for "no-pagination" tasks requiring layout before rendering. I created new class FixedRenderTask which is based on Birt source code and modified ReportEngineContext to use custom one instead of Birt provided. Now this change only affects XLS reports.--></item><item data-tags="systemTemplate agileConfig" data-edited="1348648661000" data-title="WeeklyLinkTemplate" data-created="1348648515214"><!--<<openItem title="Weekly #{date format="yy-ww" adjust="#{out value="params.days"}"}" tags="Weekly at:#{date format="yyyy-mm-dd" adjust="=0e#{out value="params.days"}"}">>--></item><item data-tags="startup" data-edited="1366020068101" data-title="Start page" data-created="1348663574295"><!--[[Birdie-C]] [[Office]]
+
+[[Home]] <<tmpl ref="DailyLinkTemplate">>--></item><item data-tags="Daily at:2012-09-27" data-edited="1348741840733" data-title="Daily 12-09-27" data-created="1348703819612"><!--Some text related to Today's tasks--></item><item data-tags="systemPlugin agileConfig" data-edited="1348713349838" data-title="WorkFlowPlugin" data-created="1348712666591" data-file="wflow.js"><!--(function($$) {
+
+$$.startWorkFlow = function() {
+
+};
+var EVENT_TAG = 'Event';
+var ACTION_TAG = 'Action';
+var PROJECT_TAG = 'Project';
+var CONTACT_TAG = 'Contact';
+var REFERENCE_TAG = 'Ref';
+var DONE_TAG = 'Done';
+var DAILY_TAG = 'Daily';
+var WEEKLY_TAG = 'Weekly';
+var STAR_TAG = 'Star';
+var DONEABLE = [EVENT_TAG, ACTION_TAG, PROJECT_TAG];
+var HIDDEN = [EVENT_TAG, ACTION_TAG, PROJECT_TAG, REFERENCE_TAG, DONE_TAG, CONTACT_TAG, STAR_TAG];
+$$.events.on('start', function() {
+    this.startWorkFlow();
+}.bind($$));
+
+
+$$.events.on('change', function(evt) {
+    var isType = function(type) {
+        return evt.item.tags.indexOf(type) != -1;
+    }
+    if (evt.remove) {
+        var removeAll = function (tag) {
+            var items = this.find({tags: [tag, evt.item.normalizeTag(evt.title)]});
+            for (var i = 0; i<items.length; i++) {
+                this.remove(items[i].title);
+            }
+        }.bind(this);
+        var clearAll = function (tag) {
+            var nameTag = evt.item.normalizeTag(evt.title);
+            var items = this.find({tags: [tag, nameTag]});
+            for (var i = 0; i<items.length; i++) {
+                if (items[i].editTag([nameTag])){
+                    this.update(items[i].title, null, null, items[i].tags);
+                }
+            }
+        }.bind(this);
+        if (isType(PROJECT_TAG)) {
+            removeAll(PROJECT_TAG);
+            removeAll(REFERENCE_TAG);
+            removeAll(ACTION_TAG);
+            removeAll(EVENT_TAG);
+        }
+        if (isType(CONTACT_TAG)) {
+            clearAll(PROJECT_TAG);
+            clearAll(ACTION_TAG);
+            clearAll(EVENT_TAG);
+        }
+        if (isType(ACTION_TAG)) {
+            removeAll(ACTION_TAG);
+        }
+        if (isType(REFERENCE_TAG)) {
+            removeAll(REFERENCE_TAG);
+        }
+    }
+    if (evt.edit) {
+        if (evt.tags && evt.tags.indexOf(DONE_TAG) == -1 && evt.item.tags.indexOf(DONE_TAG) != -1) {
+            // Tags modified and changed from not done to done - add timestamp
+            var item = evt.item;
+            if (item.editTag([/^at:[\d-]{10}/], ['at:'+(new Date().format('yyyy-mm-dd'))])) {
+                this.update(item.title, null, null, item.tags);
+            }
+        }
+        if (evt.title && evt.item.title != evt.title) {
+            var rename = function (from, to, types) {
+                for (var i = 0; i<types.length; i++) {
+                    var type = types[i];
+                    var items = this.find({tags: [from, type]});
+                    for (var j = 0; j<items.length; j++) {
+                        var item = items[j];
+                        var changeResult = item.editTag([from], [to]);
+                        if (changeResult) {
+                            this.update(item.title, null, null, item.tags);
+                        }
+                    }
+                }
+            }.bind(this);
+            var from = evt.title;
+            var to = evt.item.title;
+            if (isType(PROJECT_TAG)) {
+                rename(from, to, [PROJECT_TAG, REFERENCE_TAG, ACTION_TAG, EVENT_TAG]);
+            }
+            if (isType(CONTACT_TAG)) {
+                rename(from, to, [PROJECT_TAG, ACTION_TAG, EVENT_TAG]);
+            }
+            if (isType(ACTION_TAG)) {
+                rename(from, to, [ACTION_TAG]);
+            }
+            if (isType(REFERENCE_TAG)) {
+                rename(from, to, [REFERENCE_TAG]);
+            }
+        }
+    }
+}.bind($$));
+
+$$.renderDateSelector = function (parent, item) {
+    var dt = this.getDateTag(item);
+    var div = this.el('div', parent, {'class': 'dateSelectorRoot'});
+    var addLink = function(dt, caption, method, value) {
+        var link = this.el('a', div, {'class': 'dateSelectorLink', href: '#'}, caption);
+        link.addEventListener('click', function(evt){
+            if (!dt) {
+                dt = new Date();
+            };
+            dt['set'+method].call(dt, dt['get'+method].call(dt)+value);
+            if (item.editTag([/^at:[\d-]{10}/], ['at:'+(dt.format('yyyy-mm-dd'))])) {
+                this.update(item.title, null, null, item.tags);
+            }
+            evt.preventDefault();
+            return false;
+        }.bind(this));
+    }.bind(this);
+    addLink(dt, '-y', 'FullYear', -1);
+    addLink(dt, '-m', 'Month', -1);
+    addLink(dt, '-w', 'Date', -7);
+    addLink(dt, '-d', 'Date', -1);
+    var dateDiv = this.el('div', div, {'class': 'dateSelectorDate'}, dt? dt.format('yy/m/d, ddd'): 'No date');
+    addLink(dt, '+d', 'Date', 1);
+    addLink(dt, '+w', 'Date', 7);
+    addLink(dt, '+m', 'Month', 1);
+    addLink(dt, '+y', 'FullYear', 1);
+}
+
+$$.override('tagClick', function (sup, item, tag, tagCaption, div) {
+    var dt = this.getDateTag(item, tag);
+    if (!dt) {
+        return sup.asis();
+    }
+    var dtDiv = div.parentNode.querySelectorAll('div.dateSelectorRootTag')[0];
+    if (dtDiv) {
+        dtDiv.parentNode.removeChild(dtDiv);
+        return null;
+    }
+    dtDiv = this.el('div', div.parentNode, {'class': 'dateSelectorRootTag'});
+    this.renderDateSelector(dtDiv, item);
+    return null;
+});
+
+$$.macro.dateSelector = {
+    render: function (value, parent, item) {
+        var editItem = item;
+        if (value.title) {
+            // Toggle other item
+            editItem = this.find({title: value.title})[0];
+            if (!editItem) {
+                $$.log('No item for toggle');
+                return;
+            }
+        }
+        this.renderDateSelector(parent, editItem);
+    }
+}
+
+$$.macro.multiToggle = {
+    render: function (value, parent, item) {
+        var editItem = item;
+        if (value.title) {
+            // Toggle other item
+            editItem = this.find({title: value.title})[0];
+            if (!editItem) {
+                $$.log('No item for toggle');
+                return;
+            }
+        }
+        var tags = this.parseTags(value.tags);
+        var captions = this.parseTags(value.captions);
+        var colors = this.parseTags(value.colors);
+//        $$.log('mt', tags, captions, colors);
+        if (tags.length != captions.length) {
+            captions = tags;
+        }
+        var remove = [];
+        var expanded = false;
+        var clickHandler = function (evt) {
+            if (!expanded) {
+                // First click - expand hidden entries
+                wrap.className = 'multiToggle multiToggleVisible'
+                expanded = true;
+                return false;
+            };
+            var tag = evt.target.getAttribute('data-tag');
+            var add = [];
+            if (tag) {
+                add.push(tag);
+            }
+            $$.log('Edit', editItem.tags, remove, add);
+            if (!editItem.editTag(remove, add)) {
+                return false;
+            }
+            this.update(editItem.title, null, null, editItem.tags);
+            return false;
+        }.bind(this);
+        var wrap = this.el('div', parent, {
+            'class': 'multiToggle'
+        });
+        for (var i = 0; i<tags.length; i++){
+            var style = null;
+            if (tags.length == colors.length) {
+                style = 'color: '+colors[i]+'; border-color: '+colors[i]+';';
+            }
+            var div = this.el('div', wrap, {
+                'class': 'multiToggleItem',
+                'data-tag': tags[i],
+                'style': style
+            }, captions[i]);
+            var disabled = false;
+            if (tags[i] == '') {
+                if (editItem.hasTag(tags)) {
+                    disabled = true;
+                }
+            } else {
+                remove.push(tags[i]);
+                if (!editItem.hasTag(tags[i])) {
+                    disabled = true;
+                }
+            }
+            if (disabled) {
+                div.className += ' multiToggleItemDisabled';
+            }
+            div.addEventListener('click', clickHandler);
+        }
+    }
+};
+
+$$.macro.tagSelector = {
+    render: function (value, parent, item) {
+        var options = [];
+        options.push('-'); // No tag
+        var tags = [];
+        var exclude = this.parseTags(value.exclude);
+        var items = this.find(this.createFindConfig(null, value.tags, value.tagsOp, value.sort || '*title*'));
+        for (var i = 0; i<items.length; i++) {
+            var title = items[i].normalizeTag(items[i].title);
+            if (-1 != exclude.indexOf(title)) {
+                continue;
+            }
+            tags.push(title);
+            options.push(items[i].title);
+        }
+        var div = this.el('div', parent, {
+            'class': 'selectorBox'
+        });
+        this.el('div', div, {
+            'class': 'selectorTitle'
+        }, value.title || 'No title');
+        var select = this.el('select', div, {
+            'class': 'selectorSelect'
+        });
+        for (var i = 0; i<options.length; i++) {
+            this.el('option', select, {}, options[i]);
+        }
+        var tagIndex = -1;
+        for (var i = 0; i<tags.length; i++) {
+            var index = item.tags.indexOf(tags[i]);
+            if (-1 != index) {
+                tagIndex = i;
+                break;
+            }
+        }
+//        $$.log('tagSelector', value.title, options, tags, tagIndex, item.tags);
+        if (tagIndex == -1) {
+            select.selectedIndex = 0;
+        } else {
+            select.selectedIndex = tagIndex+1;
+            var a = this.el('a', div, {
+                href: '#'+options[tagIndex+1],
+                'class': 'pageLink'
+            }, '>>');
+            a.addEventListener('click', function() {
+                this.load(options[tagIndex+1]);
+            }.bind(this));
+        }
+        select.addEventListener('change', function() {
+            var sel = select.selectedIndex || 0;
+//            $$.log('Selected: ', select.value, sel, item);
+            if (item.editTag(tags, sel == 0? null: [options[sel]])) {
+                this.update(item.title, null, null, item.tags);
+            }
+        }.bind(this));
+    }
+};
+
+$$.macro.toggle = {
+    render: function (value, parent, item) {
+        var add = [];
+        var remove = [];
+        var title = value.title;
+        var editItem = item;
+        if (value.title) {
+            // Toggle other item
+            editItem = this.find({title: value.title})[0];
+            if (!editItem) {
+                $$.log('No item for toggle');
+                return;
+            }
+        }
+        var tags = this.parseTags(value.toggle);
+        for (var i = 0; i<tags.length; i++) {
+            var t = tags[i];
+            if (t.startsWith('+')) {
+                add.push(t.substr(1));
+            }
+            if (t.startsWith('-')) {
+                remove.push(t.substr(1));
+            }
+        }
+        if (value.onRender) {
+            // Will render as anchor
+            var el = this.el('a', parent, {
+                'href': '#'
+            });
+            value.onRender(el, value.value);
+            el.onclick = function(event){
+                // $$.log('Checkbox', el.checked, editItem, remove, add, tags, value.value);
+                var changed = value.value? editItem.editTag(add, remove): editItem.editTag(remove, add);
+                // $$.log('Checkbox', changed, editItem.tags);
+                if (!changed) {
+                    return false;
+                }
+                var err = this.update(editItem.title, null, null, editItem.tags);
+                return false;
+            }.bind(this);
+            return;
+        }
+        var el = this.el('input', parent, {
+            'type': 'checkbox',
+            'class': 'toggleCheckbox',
+            'value': 'toggle',
+            'checked': value.value? 'true': ''
+        });
+        el.onchange = function(event){
+//            $$.log('Checkbox', el.checked, editItem, remove, add, tags);
+            var changed = el.checked? editItem.editTag(remove, add): editItem.editTag(add, remove);
+//            $$.log('Checkbox', changed, editItem.tags);
+            if (!changed) {
+                return true;
+            }
+            var err = this.update(editItem.title, null, null, editItem.tags);
+            return true;
+        }.bind(this);
+    }
+
+};
+$$.macro.star = {
+    render: function (value, parent, item) {
+        if (!value.toggle) {
+            // Default - toggle Star tag
+            value.toggle="+"+STAR_TAG
+        };
+        value.onRender = function (anchor, value) {
+            if (value) {
+                // Checked
+                anchor.className = 'star starOn';
+                anchor.appendChild(document.createTextNode('★'));
+            } else {
+                // Not checked
+                anchor.className = 'star starOff';
+                anchor.appendChild(document.createTextNode('☆'));
+            }
+        }.bind(this);
+        return this.macro.toggle.render.call(this, value, parent, item);
+    }
+};
+$$.override('formatTag', function (sup, tag, item) {
+    if (tag.startsWith('at:')) {
+        var dt = new Date(tag.substr(3));
+        if (dt) {
+            return dt.format(this.shortDate);
+        }
+        return tag;
+    }
+    if (-1 != HIDDEN.indexOf(tag)) {
+        return '';
+    }
+    return sup.asis();
+});
+
+$$.getDateTag = function (item, tag) {
+    var atTag = item.hasTag([/^at:[\d|-]+/]);
+    var dt = null;
+    if (atTag && (!tag || tag == atTag)) {
+        dt = new Date(atTag.substr(3));
+    }
+    return dt;
+}
+
+$$.override('fillTemplate', function(sup, item, options) {
+    if (item.hasTag(DAILY_TAG)) {
+        var dt = this.getDateTag(item);
+        if (dt) {
+            options.templateRef = 'DailyTemplate';
+            options.date = dt;
+        }
+    }
+    if (item.hasTag(ACTION_TAG)) {
+        options.templateRef = 'ActionTemplate';
+    }
+    if (item.hasTag(CONTACT_TAG)) {
+        options.templateRef = 'ContactTemplate';
+    }
+    if (item.hasTag(PROJECT_TAG)) {
+        options.templateRef = 'ProjectTemplate';
+    }
+    if (item.hasTag(REFERENCE_TAG)) {
+        options.templateRef = 'RefTemplate';
+    }
+    if (item.hasTag(EVENT_TAG)) {
+        options.templateRef = 'EventTemplate';
+    }
+    return sup.asis();
+});
+
+$$.pluginLoaded('WorkFlowPlugin');
+
+}).call($$, $$);--></item><item data-tags="systemStyle agileConfig" data-edited="1348713361681" data-title="WorkFlowCSS" data-created="1348712709072" data-file="wflow.css"><!--.simpleEmbed {
+    margin-top: 0.1em;
+    border-top: 1px dashed #aaaaaa;
+}
+
+.selectorBox {
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+.selectorSelect {
+    margin-right: 0.2em;
+}
+
+.selectorTitle {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #888888;
+}
+
+.multiToggle {
+    display: inline-block;
+}
+
+.multiToggleItem {
+    display: inline-block;
+    vertical-align: bottom;
+    border: 2px solid #888888;
+    padding: 0 0.1em 0 0.1em;
+    margin-right: 0.2em;
+    min-width: 1em;
+    text-align: center;
+    cursor: pointer;
+}
+
+.multiToggleItemDisabled {
+    opacity: 0.2;
+    display: none;
+}
+
+.multiToggleVisible > .multiToggleItemDisabled  {
+    display: inline-block;
+}
+
+.dateSelectorRoot {
+}
+
+.dateSelectorRootTag {
+    clear: both;
+    border: 1px dashed #aaaaaa;
+    margin-top: 0.2em;
+}
+
+.dateSelectorLink {
+    margin: 0 0.3em;
+    color: #00aa00;
+}
+
+.dateSelectorDate {
+    display: inline-block;
+    padding: 0.2em;
+    width: 7em;
+    text-align: center;
+    border: 1px solid #aaaaaa;
+}
+
+.star {
+    text-decoration: none;
+    font-size: 1.2em;
+}
+
+.starOn {
+    color: #ffaa00;
+}
+
+.starOff {
+    color: #000000;
+}
+--></item><item data-tags="systemTemplate agileConfig" data-edited="1365994553322" data-title="DailyTemplate" data-created="1348713316033"><!--#{each name="itm" values="#{find reload="yes" tags="Event" tagsOp="!Done l[at:]at:#{date value="#{out value="options.date"}"}"}" header="!!! Overdue
+" template="#{tmpl ref="EventListItemTemplate"}
+
+"}
+!!! Today <<newItem text="[+e]" tags="Event at:#{date value="#{out value="options.date"}"}">>
+#{each name="itm" values="#{find reload="yes" sort="!Star Done *title*" tags="Event at:#{date value="#{out value="options.date"}"}"}" template="#{tmpl ref="EventListItemTemplate"}
+
+"}
+!!! Actions <<newItem text="[+a]" tags="Action Next">>
+#{each  name="itm" values="#{find reload="yes" sort="!Star *title*" tags="Action Next" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-tags="Event Done at:2012-09-27 Dove-R" data-edited="1348797656621" data-title="Borrow some tasks from Dove-R" data-created="1348721833231"><!--No tasks for me--></item><item data-created="1348729179808" data-title="EventListItemTemplate" data-edited="1365992688690" data-tags="systemTemplate agileConfig"><!--<<star title="#{out value="itm.title"}" value="#{hasTag tag="Star" value="#{out value="itm"}"}">><<toggle toggle="+Done" title="#{out value="itm.title"}" value="#{hasTag tag="Done" value="#{out value="itm"}"}">>[[#{out value="itm.title"}]]--></item><item data-created="1348729301471" data-title="ActionListItemTemplate" data-edited="1365992652243" data-tags="systemTemplate agileConfig"><!--<<star title="#{out value="itm.title"}" value="#{hasTag tag="Star" value="#{out value="itm"}"}">><<toggle toggle="+Done" title="#{out value="itm.title"}" value="#{hasTag tag="Done" value="#{out value="itm"}"}">><<multiToggle tags="Next Waiting Future" captions="n w f" colors="#00aa00 #ff0000 #0000ff" title="#{out value="itm.title"}">>[[#{out value="itm.title"}]] <<removeItem title="#{out value="itm.title"}" text="[x]">>--></item><item data-tags="Event at:2012-09-27 Done Dove-R" data-edited="1348792787431" data-title="Telecon with TC-D" data-created="1348737687366"><!--Bugzilla 1866 Pricing table modification. Have to follow Telecon
+* Can we help with Queries?
+* Are they different or same?
+* When first item will be ready?--></item><item data-created="1348739311657" data-title="ProjectTemplate" data-edited="1365993387049" data-tags="systemTemplate agileConfig"><!--<<star value="#{hasTag tag="Star"}">><<toggle toggle="+Done" value="#{hasTag tag="Done"}">><<multiToggle tags="[] SomeDay" captions="active someday" colors="#00aa00 #ff0000">><<tagSelector title="Parent:" tags="Project" exclude="[#{out value="item.title"}]">><<tagSelector title="Contact:" tags="Contact">>
+||
+!!! Next Actions <<newItem tags="Next Action [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Action Next [#{out value="item.title"}]" tagsOp="!Done" sort="!Star"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+!!! Waiting Actions <<newItem tags="Waiting Action [#{out value="item.title"}]" text="+">>
+#{each name="itm" groupTag="#{find tags="Contact" type="title"}" values="#{find reload="yes" tags="Action Waiting [#{out value="item.title"}]" tagsOp="!Done" sort="!Star"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+" noGroupTitle="''No contact''
+
+" groupTemplate="''#{out value="group"}'' <<newItem tags="Waiting Action [#{out value="item.title"}] #{out value="tag"}" text="+">>
+
+"}
+!!! Future Actions <<newItem tags="Future Action [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Action Future [#{out value="item.title"}]" tagsOp="!Done" sort="!Star"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+|
+!!! Subprojects <<newItem tags="Project [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Project [#{out value="item.title"}]" tagsOp="!Done" sort="!Star *title*"}" template="#{tmpl ref="ProjectListItemTemplate"}
+
+"}
+!!! Events <<newItem tags="Event [#{out value="item.title"}]" text="+">>
+#{each groupTag="/^at:" noGroupTitle ="''No date''
+
+" name="itm" values="#{find reload="yes" tags="Event [#{out value="item.title"}]" tagsOp="!Done" sort="/^at: !Star"}" template="#{tmpl ref="EventListItemTemplate"}
+
+" groupTemplate="''#{out value="group"}''
+
+"}
+!!! References <<newItem tags="Ref [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes"  sort="!Star *title*" tags="Ref [#{out value="item.title"}]"}" template="[[#{out value="itm.title"}]]
+
+"}
+||
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-created="1348739341274" data-title="ActionTemplate" data-edited="1365993133452" data-tags="systemTemplate agileConfig"><!--<<star value="#{hasTag tag="Star"}">><<toggle toggle="+Done" value="#{hasTag tag="Done"}">><<multiToggle tags="Next Waiting Future" captions="next waiting future" colors="#00aa00 #ff0000 #0000ff">><<tagSelector title="Project:" tags="Project">><<tagSelector title="Contact:" tags="Contact">><<tagSelector title="Depends:" tags="Action" tagsOp="!Done" exclude="[#{out value="item.title"}]">>
+!!! Blocked Actions <<newItem tags="Future Action [#{out value="item.title"}] #{hasTag tags="#{find tags="Project" type="title"}"}" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Action [#{out value="item.title"}]" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-tags="systemTemplate agileConfig" data-edited="1366009005521" data-title="EventTemplate" data-created="1348741616292"><!--<<dateSelector>>
+
+<<star value="#{hasTag tag="Star"}">><<toggle toggle="+Done" value="#{hasTag tag="Done"}">> <<tagSelector title="Project:" tags="Project">><<tagSelector title="Contact:" tags="Contact">>
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-created="1348788080829" data-title="10a Telecon with Jim" data-edited="1348879263356" data-tags="Event Dove-R Done at:2012-09-28 [Jim Vopni]"><!--Done, but without real results. Still not clear what to change and do we really need those changes--></item><item data-tags="agileConfig" data-edited="1368008123917" data-title="Quick Add" data-created="1348789395828"><!--<<newItem text="New Project" tags="Project">>
+
+<<newItem text="New Contact" tags="Contact">>
+
+<<newItem text="New Event" tags="Event">>
+---
+[[Project Dashboard]]
+
+[[Action Dashboard]]
+---
+[[Future Events]]
+
+[[Done Actions and Events]]--></item><item data-created="1348789409511" data-title="Dove-R" data-edited="1365647779576" data-tags="Project Active Done at:2013-04-11"><!----></item><item data-tags="Event Dove-R Done at:2012-09-28 [Alexei Skvirski]" data-edited="1348879510348" data-title="4p Telecon with TC-D" data-created="1348797155896"><!--* Pricing Table - when queries will be fixed queries are done, template will be finished soon
+** Templates - RCL modifies - yes, after first template will be done
+* User Management, teleconf with Jim, notify results to us - will update progress 
+* BZ 1858 when it'll be finished--></item><item data-tags="Action [Reporting module] [Alexei Skvirski] Next Done at:2012-10-01" data-edited="1349052137637" data-title="Bugzilla 1887" data-created="1348797199399"><!--User Management UI--></item><item data-tags="Project Dove-R Done at:2012-11-03" data-edited="1351952410841" data-title="Reporting module" data-created="1348804251893"><!----></item><item data-tags="systemTemplate agileConfig" data-edited="1365993007998" data-title="ProjectListItemTemplate" data-created="1348804360049"><!--<<star title="#{out value="itm.title"}" value="#{hasTag tag="Star" value="#{out value="itm"}"}">><<toggle toggle="+Done" title="#{out value="itm.title"}" value="#{hasTag tag="Done" value="#{out value="itm"}"}">><<multiToggle tags="[] SomeDay" captions="a s/m" colors="#00aa00 #ff0000" title="#{out value="itm.title"}">>[[#{out value="itm.title"}]]--></item><item data-created="1348805365345" data-title="Excel reports on server" data-edited="1348879860326" data-tags="Next Action Done at:2012-09-28 [Reporting module]"><!--Need to change RunAndRenderTask in same manner as RenderTask
+* Find code in CSV
+* Replace task
+* Add necessary code - only force layout actually
+
+Commited #20201git:60f942b--></item><item data-created="1348810213650" data-title="Noriaki Nakagawa" data-edited="1348880440032" data-tags="Contact"><!----></item><item data-created="1348810335616" data-title="ContactTemplate" data-edited="1348878993495" data-tags="systemTemplate agileConfig"><!--||
+!!! Waiting Actions <<newItem tags="Waiting Action [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Action Waiting [#{out value="item.title"}]" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+!!! Associated Actions <<newItem tags="Next Action [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Action [#{out value="item.title"}]" tagsOp="!Done !Waiting"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+"}
+|
+!!! Projects <<newItem tags="Project [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Project [#{out value="item.title"}]" tagsOp="!Done"}" template="#{tmpl ref="ProjectListItemTemplate"}
+
+"}
+!!! Events <<newItem tags="Event [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Event [#{out value="item.title"}]" tagsOp="!Done"}" template="#{tmpl ref="EventListItemTemplate"}
+
+"}
+||
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-tags="Contact" data-edited="1348828860489" data-title="Jim Vopni" data-created="1348810697754"><!----></item><item data-tags="Contact" data-edited="1348879510330" data-title="Alexei Skvirski" data-created="1348810715898"><!--+49 211 6546 277--></item><item data-tags="systemTemplate agileConfig" data-edited="1349067938083" data-title="RefTemplate" data-created="1348812029717"><!--<<tagSelector title="Project:" tags="Project">><<tagSelector title="Parent:" tags="Ref" exclude="[#{out value="item.title"}]">>
+!!! Child References <<newItem tags="Ref [#{out value="item.title"}]" text="+">>
+#{each name="itm" values="#{find reload="yes" tags="Ref [#{out value="item.title"}]"}" template="[[#{out value="itm.title"}]]
+
+"}
+@@simpleEmbed
+#{out value="item.text"}
+@@--></item><item data-created="1348823477274" data-title="Birdie-C" data-edited="1367987121386" data-tags="Project Star Tikal"><!--!!! Links:
+
+* [[https://jira.gdn.rintra.net/secure/Dashboard.jspa?selectPageId=10404|Jira]]
+* [[https://wiki.gdn.rintra.net/display/BirdieDev/Birdie+Dev+Home|Confluence]]
+* [[http://10.85.22.239:8080/|RAC Jenkins]]
+--></item><item data-created="1348823500760" data-title="6p UI topics Meeting" data-edited="1365726970556" data-tags="Event [Jim Vopni] Done at:2012-10-04 Birdie-C"><!--Cancelled because of Dove-R tasks--></item><item data-tags="Project" data-edited="1348880459330" data-title="Office" data-created="1348880459330"><!----></item><item data-tags="Event Office [Takashi Akutsu] Done at:2012-10-02" data-edited="1349163025381" data-title="9a Meeting in Hall" data-created="1348880476435"><!----></item><item data-tags="Contact" data-edited="1348880487842" data-title="Takashi Akutsu" data-created="1348880487842"><!----></item><item data-tags="Action Office Next Done at:2012-10-01" data-edited="1349077904840" data-title="Patent application form" data-created="1348880533297"><!----></item><item data-tags="Project" data-edited="1348880651648" data-title="Home" data-created="1348880651648"><!----></item><item data-tags="Contact" data-edited="1348880672751" data-title="Marina" data-created="1348880672751"><!----></item><item data-tags="agileConfig" data-edited="1348884424115" data-title="Project Dashboard" data-created="1348884068645"><!--<<tmpl lines="yes" ref="ProjectDBoardTemplate">>--></item><item data-tags="systemTemplate agileConfig" data-edited="1365994092321" data-title="ProjectDBoardTemplate" data-created="1348884371507"><!--||
+!! Active Projects <<newItem tags="Project" text="+">>
+#{each name="itm" values="#{find reload="yes"  sort="!Star *title*" tags="Project" tagsOp="!Done !SomeDay"}" template="#{tmpl ref="ProjectListItemTemplate"}
+
+"}
+|
+!! SomeDay Projects <<newItem tags="Project SomeDay" text="+">>
+#{each name="itm" values="#{find reload="yes"  sort="!Star *title*" tags="Project SomeDay" tagsOp="!Done"}" template="#{tmpl ref="ProjectListItemTemplate"}
+
+"}
+!! Done Projects
+#{each name="itm" values="#{find reload="yes"  sort="!Star *title*" tags="Project Done"}" template="#{tmpl ref="ProjectListItemTemplate"}
+
+"}
+||--></item><item data-created="1348885571873" data-title="ActionDBoardTemplate" data-edited="1365994433435" data-tags="systemTemplate agileConfig"><!--||
+!! Next Actions <<newItem tags="Action Next" text="+">>
+#{each groupTag="#{find tags="Project" type="title"}" noGroupTitle ="''No Project''
+
+" name="itm" values="#{find reload="yes" sort="!Star *title*" tags="Action Next" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+" groupTemplate="[[#{out value="group"}]] <<newItem text="+" tags="Action Next #{out value="tag"}">>
+
+"}
+!! Waiting Actions <<newItem tags="Action Waiting" text="+">>
+#{each groupTag="#{find tags="Project" type="title"}" noGroupTitle ="''No Project''
+
+" name="itm" values="#{find sort="!Star *title*" reload="yes" tags="Action Waiting" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+" groupTemplate="[[#{out value="group"}]] <<newItem text="+" tags="Action Waiting #{out value="tag"}">>
+
+"}
+|
+!! Future Actions <<newItem tags="Action Future" text="+">>
+#{each groupTag="#{find tags="Project" type="title"}" noGroupTitle ="''No Project''
+
+" name="itm" values="#{find reload="yes" sort="!Star *title*" tags="Action Future" tagsOp="!Done"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+" groupTemplate="[[#{out value="group"}]] <<newItem text="+" tags="Action Future #{out value="tag"}">>
+
+"}
+||--></item><item data-created="1348885867064" data-title="Action Dashboard" data-edited="1365994340146" data-tags="agileConfig"><!--<<tmpl ref="ActionDBoardTemplate" lines="yes">>--></item><item data-tags="Next Action Dove-R Done at:2012-09-29" data-edited="1348919834891" data-title="User Management UI" data-created="1348889644851"><!--* $TOPLEVEL$ - move one level up, only add OK
+* Need one more allowed level OK
+* Verify import/export OK
+* $TOPLEVEL$ in Tab title OK
+---
+* Install templates OK
+* Template parameters UI, fix translation $NONE$, $TOPLEVEL$ OK
+---
+Commited: SVN#2024 git:f102c04--></item><item data-created="1348958571004" data-title="Haircut" data-edited="1349049380274" data-tags="Event Home Done at:2012-09-30"><!----></item><item data-created="1348964888503" data-title="CRONOS" data-edited="1349082374084" data-tags="Event Office Done at:2012-10-01"><!----></item><item data-created="1348989915905" data-title="Make DX order" data-edited="1348996725495" data-tags="Action Next Home Done at:2012-09-30"><!----></item><item data-tags="Next Action [Reporting module] Done at:2012-10-01" data-edited="1349054054887" data-title="Verify why $TOPLEVEL$ is not translated" data-created="1349051323957"><!--Was right, the problem is missing $TOPLEVEL$ constant in Common.properties file
+
+svn:20252 git:f510045--></item><item data-tags="Project Home Done at:2013-02-08" data-edited="1360314520827" data-title="高度人材 Visa" data-created="1349052284157"><!----></item><item data-tags="Next Action [高度人材 Visa] Done at:2012-10-02" data-edited="1349147285457" data-title="Prepare documents for 相談" data-created="1349052313797"><!--* Annual income, One month page - FineSupport
+* Diplomas/translation - Home
+* Patents (first pages) - RIPS
+* Passports - Home
+* Points check lists - Office
+* CV - Office
+* Salary related prints--></item><item data-tags="Future Action [Prepare documents for 相談] [高度人材 Visa] Done at:2012-11-03" data-edited="1351952478473" data-title="Prepare necessary documents" data-created="1349052342580"><!----></item><item data-tags="Action [高度人材 Visa] [Prepare necessary documents] Future Done at:2012-11-03" data-edited="1351952479998" data-title="Apply for Visa" data-created="1349052377780"><!----></item><item data-tags="Event [高度人材 Visa] Done at:2012-10-02" data-edited="1349163012203" data-title="Documents 相談" data-created="1349052420339"><!--* Education OK?
+* Salary amount?
+* Work history how to check? Need before Japan?
+* Patents OK?
+* Permission how?
+* Family together?
+
+Result : OK. Need some documents to apply--></item><item data-tags="Daily at:2012-10-01" data-edited="1349086512042" data-title="Daily 12-10-01" data-created="1349052841738"><!--# (Applied, but without relevant patents) Finish Patent application form and apply
+#* Need relevant patents
+# (Investigated one bug, found few other problems, fixed l10n) Dove-R, follow pre-alpha activities
+# (Glossary and supporting documentation ready) Prepare for Tuesday's Immigration Bureau visit--></item><item data-tags="Project Home SomeDay" data-edited="1366009065389" data-title="Tango1" data-created="1349053031609"><!----></item><item data-tags="Action Tango1 Next Done at:2012-10-01" data-edited="1349056339079" data-title="Add done actions display" data-created="1349053052761"><!----></item><item data-tags="agileConfig systemTemplate" data-edited="1349055417007" data-title="DoneTemplate" data-created="1349054429442"><!--||
+!! Done Actions
+#{each groupTag="/^at:" noGroupTitle ="''No date''
+
+" name="itm" values="#{find reload="yes" tags="Action Next Done" sort="!/^at:"}" template="#{tmpl ref="ActionListItemTemplate"}
+
+" groupTemplate="''#{out value="group"}''
+
+"}
+|
+!! Done Events
+#{each groupTag="/^at:" noGroupTitle ="''No date''
+
+" name="itm" values="#{find reload="yes" tags="Event Done" sort="!/^at:"}" template="#{tmpl ref="EventListItemTemplate"}
+
+" groupTemplate="''#{out value="group"}''
+
+"}
+||--></item><item data-tags="agileConfig" data-edited="1349054620668" data-title="Done Actions and Events" data-created="1349054603839"><!--<<tmpl lines="yes" ref="DoneTemplate">>--></item><item data-tags="Next Action Tango1 Done at:2012-10-01" data-edited="1349059155634" data-title="Add date selector/editor" data-created="1349056352867"><!--To [[EventTemplate]], tag click handler--></item><item data-tags="Event Dove-R [Takashi Akutsu] Done at:2012-10-01" data-edited="1349061007227" data-title="11:50a Meeting 本館B" data-created="1349059194405"><!--QAR passed, alpha release on 10/5--></item><item data-tags="Ref [高度人材 Visa]" data-edited="1349067636924" data-title="Necessary documents" data-created="1349067636923"><!----></item><item data-tags="Ref [高度人材 Visa]" data-edited="1349147805766" data-title="Glossary" data-created="1349071575373"><!--!!! Terms
+* /高度人材|こうどじんざい/ - High Skilled Worker
+* /在留資格認定証明書|ざいりゅうしかくにんていしょうめいしょ/ - Certificate of Eligibility
+* /学歴|がくれき/ - Education History
+* /職歴|しょくれき/ - Employment History
+* /年収|ねんしゅう/ - Annual Income, /報酬|ほうしゅう/ - Remumeration
+* /特許発明|とっきょはつめい/ - Patent Invention
+* /配偶者|はいぐうしゃ/ - Spouse (Dependent)
+!!! Salary
+* /基本給|きほんきゅう/ - Base Salary
+* /調整手当|ちょうせいてあて/ - Adjustment Allowance
+* /基準賞与額|きじゅんしょうよがく/ - Standard Bonus
+--></item><item data-tags="Action Dove-R Done at:2012-10-03 Next" data-edited="1349405979072" data-title="User removal" data-created="1349072489582"><!--Actually the problem user assignments shouldn't be removed. Now it's removed by ds.xml file, but rather should be updated by ds.xml of by trigger. Need to decide which is better
+---
+Fixed from dx.xml, also fixed some UI issues (No drop and pane for $TOPLEVEL$)--></item><item data-created="1349080893387" data-title="Salary Documents" data-edited="1349153629209" data-tags="Ref Glossary"><!--* /源泉徴収票|げんぜんちょうしゅうひょ/ - Withholding slip
+* /在籍(就労)証明|ざいせき(しゅうろう)/ - Enrollment Certificate
+* /給与証明|きゅうよしょうめい/ - Salary Certificate
+* /職歴給与申出書|しょくれききゅうよもうしでしょ/ - Salaries Career Request--></item><item data-created="1349086577084" data-title="Remove link" data-edited="1349315891638" data-tags="Next Action Tango1 Done at:2012-10-04"><!--* Remove item (in lists)
+* Remove by tags
+* Remove itself--></item><item data-created="1349086679210" data-title="Convert item" data-edited="1365740880988" data-tags="Action Tango1 Future"><!--* Event <-> Action
+* Action <-> Ref
+* Project <-> Action--></item><item data-tags="Event Office Done at:2012-10-02" data-edited="1349163027499" data-title="Take holiday" data-created="1349134166347"><!----></item><item data-tags="Action Next Home Done at:2012-10-02" data-edited="1349229398828" data-title="Buy cat food" data-created="1349141668700"><!----></item><item data-created="1349149921952" data-title="Auto save plugin" data-edited="1357621209788" data-tags="Next Action Tango1 Done at:2013-01-08"><!----></item><item data-created="1349221811267" data-title="Order necessary documents" data-edited="1351952471983" data-tags="Action [高度人材 Visa] Waiting Done at:2012-11-03"><!--Waiting for Contract--></item><item data-created="1349221829923" data-title="Make translation" data-edited="1351952475768" data-tags="Action [高度人材 Visa] Future Done at:2012-11-03"><!----></item><item data-tags="Event [Jim Vopni] Done at:2012-10-05 Birdie-C" data-edited="1365726970557" data-title="2:30p Meeting with Jim" data-created="1349405884603"><!----></item><item data-tags="Daily at:2012-10-05" data-edited="1349406845970" data-title="Daily 12-10-05" data-created="1349406845970"><!--# Finish DirectoryReader
+# Install PC with Windows 7
+# Birdie-C, continue implementation--></item><item data-tags="Waiting Action [高度人材 Visa] Done at:2013-02-08" data-edited="1360314299248" data-title="Waiting for completion" data-created="1351952498511"><!----></item><item data-created="1351953016691" data-title="保育園申込" data-edited="1360314285398" data-tags="Project Home Done at:2013-02-08"><!----></item><item data-created="1351953074995" data-title="Reorder work certificate" data-edited="1352076210620" data-tags="Next Action 保育園申込 Done at:2012-11-05"><!----></item><item data-created="1351953132519" data-title="Apply for 保育園" data-edited="1357621246915" data-tags="Future Action 保育園申込 Done at:2013-01-08"><!----></item><item data-tags="Project SomeDay Office" data-edited="1365946296098" data-title="Patents" data-created="1351953694831"><!----></item><item data-created="1352072449228" data-title="Daily 12-11-05" data-edited="1352072449228" data-tags="Daily at:2012-11-05"><!--# [[Birdie-C]] Refactor polling, prepare for integration tests--></item><item data-created="1352072570317" data-title="Letter to HR" data-edited="1352073636557" data-tags="Ref 保育園申込"><!--GM本　BDC第二S開発室一G　ボロビエフです。
+
+お世話になっております。
+
+申し訳ありませんが、先週木曜日間違い書類を送りました。
+
+区役所役人と相談して、今回の添付したの書類は正解です。
+
+保育所入所申し込みの締切日は今週金曜日ですので、出来れば木曜日(11/8)までいただきたいです。
+
+どうぞよろしくお願い致します。--></item><item data-created="1352101515482" data-title="Starred actions" data-edited="1365994452617" data-tags="Next Action Tango1 Done at:2013-04-15"><!----></item><item data-created="1352106378923" data-title="Prepare ASUS customer center info" data-edited="1357621217524" data-tags="Next Action Home Done at:2013-01-08"><!----></item><item data-created="1352106515913" data-title="Checkbox markup" data-edited="1365740880240" data-tags="Action Tango1 Future"><!--Allow rendering of [ ] and [X] with click support
+
+Have to think how to implement it - currently rule handlers have no information about text position inside item content--></item><item data-created="1360315667574" data-title="Extend UR application" data-edited="1360408833820" data-tags="Event Home Done at:2013-02-09"><!----></item><item data-created="1360315789213" data-title="Describe syntax" data-edited="1365740881798" data-tags="Action Tango1 Future"><!----></item><item data-tags="Event [Bryan Cheng] HR Done at:2013-02-08" data-edited="1360408840648" data-title="Reply - resume" data-created="1360316640990"><!----></item><item data-tags="Contact" data-edited="1360317925010" data-title="Bryan Cheng" data-created="1360316655118"><!----></item><item data-tags="Project Home" data-edited="1360316692430" data-title="HR" data-created="1360316689313"><!----></item><item data-tags="Event [Bryan Cheng] HR Done at:2013-02-07" data-edited="1360316758013" data-title="Meeting" data-created="1360316731750"><!----></item><item data-tags="Next Action HR [Bryan Cheng] Done at:2013-02-11" data-edited="1360590541942" data-title="Prepare resume" data-created="1360317000105"><!----></item><item data-tags="Future Action Tango1" data-edited="1360317942878" data-title="Rename tag with item" data-created="1360317942877"><!----></item><item data-created="1365647867348" data-title="1p Birthday" data-edited="1365946279850" data-tags="Event Home Done at:2013-04-14"><!--Link to [[https://maps.google.com/maps/ms?msid=210990369641083373054.0004b9b5d2dbbb82a41d3&msa=0&ie=UTF8&ll=35.660354,139.853205&spn=0.001218,0.002642&t=m&z=19&vpsrc=6&iwloc=0004d9d09190086b53608|Google maps]]--></item><item data-created="1365647946242" data-title="Review collect and notify jobs" data-edited="1365726970535" data-tags="Next Action Done at:2013-04-11 Birdie-C"><!--{{{
+CounterCollectJob: OK
+CounterNotifyJob: OK
+RegularCollectJob: OK
+RegularNotifyJob: OK
+}}}--></item><item data-tags="Next Action Done at:2013-04-11 Birdie-C" data-edited="1365726970536" data-title="BIRDIESEC-435" data-created="1365648767393"><!--A device is displayed as a managed device even it failed to register to @Remote center
+!! Log
+* Implementation done, but have to re-create DBs and register devices to verify implementation
+* Implementation verified
+* Committed and updated Jira page. Will be released in 0.0.16--></item><item data-tags="Event [Matthew Ianotti] Done at:2013-04-11 Birdie-C" data-edited="1365726970558" data-title="5p Check Matthew design" data-created="1365656074372"><!--* Need special long running task, which will receive new contexts and execute combined counter and regular collect tasks and save result
+
+* I will prepare new combined job--></item><item data-tags="Contact" data-edited="1365656094004" data-title="Matthew Ianotti" data-created="1365656094004"><!----></item><item data-tags="Event Done at:2013-04-11 Birdie-C" data-edited="1365726970558" data-title="6p FW update meeting" data-created="1365656249393"><!--* Center -> DM -> Core (Register FW update task)
+* Center -> DM -> Core (Cancel FW update)
+* DM (run FW update)
+
+* No big problems, Core will schedule job, DM will run it by schedule, during exec, DM downloads and puts FW to device and reboots it. When callDevMachineStatus comes, FW will be checked (What we're doing with Matthew)--></item><item data-tags="Event Home Done at:2013-04-13" data-edited="1365898673508" data-title="Present delivery" data-created="1365658390999"><!--~12:00--></item><item data-tags="Ref Birdie-C" data-edited="1365726970523" data-title="Counters and other info" data-created="1365674498713"><!--* 5.24 Periodic Device Connection Check (execIntervalNRS/execIntervalMIB)
+** NRS: getNRSConnectInfo
+** SNMP: ID2?
+* [X] 5.25 Device Information Periodic Update (acqInterval)
+** NRS: getNoChargeCountAll (output/data) -> DB as XML *4 (Checkbox1)
+** NRS: getMachineInfoAll (output/data) -> DB as XML *3
+** SNMP: No support
+* [X] 5.26 Device Counter Information Acquisition (acqCounterInterval)
+** Counters:
+*** NRS: getChargeCountAll (output/data) -> DB as XML *5 (Checkbox2)
+*** SNMP: MIB values, make XML *6
+** ROM versions:
+*** NRS: getRomupdateVersion2 *7
+*** NRS: getFuncInfoMainRomVersion If *7 is not supported
+* [X] 5.29 Device Status Information @Me
+** Notification: "regular" NRS_BOX_NFTYPE_NOTICE_DEVICE_STATE
+** !No counters yet - skip device
+** NRS: notifyNRSDeviceRegularInfo (array<NRSNRSDeviceRegularInfo>)
+*** List<NRSStdCount> arrayOfLatestCounterInfo (device counter info) *5
+*** List<NRSStdCount> arrayOfUnifyReportCounterInfo *4
+*** List<NRSRomVersion> arrayOfRomVersion *2
+** NRSMachineInfoAll data (device regular info) *1 *3
+** SNMP: notifyDeviceCounterInfo (array<NRSDeviceCounterInfo>)
+*** List<NRSStdCount> arrayOfLatestCounterInfo (device counter info) *6
+*** List<NRSStdCount> arrayOfDemandCounterInfo (closing date!)
+*** List<NRSRomVersion> arrayOfRomVersion Empty
+* [X] 5.30 Device Counter Information @Me
+** Notification: "counter" NRS_BOX_NFTYPE_NOTICE_COUNTER_INFORMATION
+** ! Not closed yet - skip device
+** notifyDeviceCounterInfo (SNMP/NRS) (array<NRSDeviceCounterInfo>) *1
+* [X] 5.31 Device Firmware Version Upgrade @Kobayashi @Me
+** notifyDeviceFWInfo (String deviceId, Element arrayOfRomVersion) *2
+* 5.32 Device Status Change @Matthew
+** 5.33 Device Information Change @Matthew
+*** NRS: notifyDeviceInfoChange( String deviceId, List fields, NRSDeviceInfo deviceInfo )
+* [ ] Closing counters:
+** [X] Define schedule
+*** ? Can user change - from gc.properties it's possible. But, only at restart. Interval in seconds is OK
+*** [X] Transfer Core <-> DM
+*** ? Which side will create - Core will create at registration time (and startup also). DM will trigger creation by Rest
+** [ ] Execute counter closing
+*** In general, we need one more item in, maybe box info, for the last counter closing start date.
+*** We select that date and take current date. Taking only day, hour, minute, we select target devices, in a loop
+*** We we don't have that date -> this month, 1st, 00:00:00
+*** Copy counters for target devices
+*** Update last counter closing start date--></item><item data-tags="Next Action Birdie-C Done at:2013-04-12" data-edited="1365741610080" data-title="Prepare combined job for machine status" data-created="1365677595200"><!--!!! Plan
+* Unify TaskBean OK
+* Create new Job managed by Spring: OK
+* Give a way to access it from ControllerImpl: OK
+* Properly test - Job is done and working, but collection failed because of race condition? Probably not, most likely it's that device problem and we don't need to take care
+* Commit and report
+--></item><item data-created="1365685269640" data-title="Kusuri" data-edited="1365946273692" data-tags="Event Home Done at:2013-04-14"><!----></item><item data-created="1365685285665" data-title="Commuter pass" data-edited="1365982000352" data-tags="Event Home at:2013-05-15"><!----></item><item data-tags="Action Birdie-C Waiting Done at:2013-04-15" data-edited="1365988818868" data-title="BIRDIESEC-532" data-created="1365741628670"><!--* 01: 00006 5 5 1
+* 02: 00007 5 1 -1
+
+!! Result
+
+Finally problem found and fixed: I didn't check alerts I already decided to add - not removed duplicates from the list of current SNMP MIB calls--></item><item data-tags="Event Birdie-C Done at:2013-04-12" data-edited="1365750217937" data-title="3p Source code review MTS3" data-created="1365742254890"><!--* NrsDeviceConnectionImpl, getDeviceId() overrides deviceID and this is OK
+* If deviceID has control code, can we use it for NRS connections? No
+* If, at polling time we found device with control code, device becomes SNMP - code is not applicable
+* IllegalDeviceId is triggered only when control code is found (FW, IP address was changed)
+
+!!! Important
+* Should avoid using deviceId = null when getting connection to device. Have to use deviceId saved at registration--></item><item data-tags="Action Birdie-C Waiting Done at:2013-04-15" data-edited="1365988819491" data-title="BIRDIESEC-535" data-created="1365743008496"><!--prtLocalizationCountry and prtLocallizationLanguage of autoCallMIB is different to the MIB values
+
+!!! Result:
+
+Fixed, was stupid typo, 9 instead of 0 in SNMP value index--></item><item data-tags="Next Action Birdie-C Done at:2013-04-17" data-edited="1366184252745" data-title="Add support of on-site data flag" data-created="1365750418641"><!----></item><item data-tags="Next Action Birdie-C Done at:2013-04-17" data-edited="1366175355340" data-title="Review Nrs connection use" data-created="1365750500603"><!--Don't use null as a deviceId--></item><item data-tags="Action Birdie-C Next Done at:2013-04-17" data-edited="1366170913050" data-title="Upload missing certificate" data-created="1365752697629"><!--Rescue512--></item><item data-tags="Event Done at:2013-04-12" data-edited="1365759348377" data-title="5p Code Review Kobayashi MTS3" data-created="1365754217442"><!--Biggest problem: when data is updated by request from Core, we need to update DM DB tables as well, taking care about permission settings and default values, when Permission changed back--></item><item data-tags="Action Birdie-C Waiting Done at:2013-04-15" data-edited="1365988321169" data-title="BIRDIESEC-383" data-created="1365762115037"><!--Changed server version to "UC2.1"--></item><item data-tags="Event Office Done at:2013-04-18" data-edited="1366272378664" data-title="3p 全社方針説明" data-created="1365992878307"><!--4/18 15:00-16:00 4F会議室--></item><item data-tags="Next Action Birdie-C Star Done at:2013-05-08" data-edited="1367989620100" data-title="BIRDIESEC-529" data-created="1365992921800"><!--Tasks that do not know to AM 09:00 is executed
+!!! Result: 
+Fixed in 25067--></item><item data-tags="Event Birdie-C [Matthew Ianotti] Done at:2013-04-15" data-edited="1366017049874" data-title="5p Meeting with Matthew" data-created="1366006764400"><!--There is existing interface for updating device info. Should be possible to re-use it--></item><item data-tags="Event Office Done at:2013-04-18" data-edited="1367980350762" data-title="3p Hall BDC Meeting" data-created="1366008913158"><!----></item><item data-tags="Event Star Office Done at:2013-04-25" data-edited="1367980332236" data-title="Check Salary" data-created="1366008957848"><!----></item><item data-created="1366017071994" data-title="Map NrsResultCode to ErrorCode" data-edited="1368364096308" data-tags="Action Birdie-C Future"><!----></item><item data-created="1366019877507" data-title="Tango2" data-edited="1366019883729" data-tags="Project Home Star"><!----></item><item data-created="1366019971451" data-title="Design sync protocol" data-edited="1368242753370" data-tags="Next Action Tango2 Done at:2013-05-11"><!--In general, protocol is designed and implementation of connection management is done. Next step is implement document management on client side and synchronisation--></item><item data-created="1366074257794" data-title="Visit clinic" data-edited="1366100664706" data-tags="Event Done at:2013-04-16"><!--antritis--></item><item data-created="1366156357503" data-title="BIRDIESEC-547" data-edited="1366161428027" data-tags="Next Action Birdie-C Star Done at:2013-04-17"><!--! Not Found a autoCallMIB log by Gateway Log Tool
+---
+Problem: PJL Code should be 0 when not found
+
+Committed SVN 24596--></item><item data-created="1366161444861" data-title="BIRDIESEC-550" data-edited="1367980253409" data-tags="Next Action Birdie-C [Daisuke Sasaki] Star Done at:2013-05-08"><!--Difference in time of autoCallMib log is large
+---
+Actually it's true, for 3 devices, first takes 1 second, second 1 minute, last one 6 minutes
+* 10.61.54.196
+* 10.61.54.198
+* 10.61.54.197--></item><item data-created="1366161470398" data-title="Daisuke Sasaki" data-edited="1366161470398" data-tags="Contact"><!----></item><item data-created="1366161668059" data-title="BIRDIESEC-551" data-edited="1367980287386" data-tags="Action Birdie-C Next Done at:2013-05-08"><!--Non default values in 'resolved' MIB Call alerts
+*  Committed, has to patch the latest version--></item><item data-created="1366177227187" data-title="5p Meeting with Matthew 2FC" data-edited="1366189555867" data-tags="Event Birdie-C [Matthew Ianotti] Done at:2013-04-17"><!----></item><item data-created="1366177570832" data-title="Noriaki Hamada" data-edited="1366177606986" data-tags="Contact"><!--tel: 外線：[[tel:03-6890-3726]]（内線：[[tel:8-333-3726]]） --></item><item data-created="1366177723277" data-title="Akira Nagamori" data-edited="1366177738169" data-tags="Contact"><!--tel: [[tel:8-333-3642]]/[[tel:03-6890-3642]]--></item><item data-created="1366190763041" data-title="BIRDIESEC-557" data-edited="1367980279432" data-tags="Action Birdie-C Star Next Done at:2013-05-08"><!--Counter notify - wrong flag name
+* Already fixed but waiting for new version to check implementation--></item><item data-tags="Event at:2013-05-27" data-edited="1368142566175" data-title="Coffee" data-created="1366200533340"><!----></item><item data-created="1366252809531" data-title="Rsh protocol implementation" data-edited="1366261615058" data-tags="Next Action Birdie-C Done at:2013-04-18"><!--* [[http://www.ietf.org/rfc/rfc1282.txt|RFC]]
+* [[http://en.wikipedia.org/wiki/Remote_Shell|Wikipedia]]
+---
+Implementation: 
+
+C:\Work\tikal\src\tikal-fs-ws\TcpRsh--></item><item data-created="1366277828729" data-title="Moving 13/04" data-edited="1366352708742" data-tags="Event Office Done at:2013-04-19"><!----></item><item data-created="1366287089461" data-title="粗大ごみ" data-edited="1366335108897" data-tags="Next Action Home Done at:2013-04-19"><!----></item><item data-tags="Next Action Birdie-C Star Done at:2013-05-08" data-edited="1367980259959" data-title="BIRDIESEC-569" data-created="1366327611580"><!--Race condition, dc.nrs bundle can not subscribe to STARTUP event, because event triggered before NrsGatewayControllerImpl is created by Spring
+!!! How to fix:
+* Create some way to mark necessary bundles and wait those bundles
+* Start registry tracker (like now) for main services of those bundles (implemetation was changed from Spring events to OSGi trackers because of race condition (data.manager started before system.manager))
+--></item><item data-tags="Event Home Done at:2013-04-30" data-edited="1367980323734" data-title="粗大ごみーソファー" data-created="1366335086122"><!----></item><item data-tags="Project" data-edited="1367987097392" data-title="Tikal" data-created="1367987097392"><!----></item><item data-tags="Next Action Tikal Done at:2013-05-09" data-edited="1368081865013" data-title="PoC UI configuration" data-created="1367987142191"><!--* Create first bundle with simple UI: OK, UI is displayed, but server.properties file not found
+Result: config files have to be moved to dedicated folder, and class loader should be configured to search files there. Right after re-config, {{{Config.initGlobalConfig();}}} should be called. Also {{{webRoot: __AUTODETECT__}}} seems to work
+* Add DB support
+Added: everything works out of the box
+* Create child bundle
+** There is no way to override resource. Only resources with different names can be accessed. As a result, every new folder or file in /war/ folder has to be described in plugin.xml. Plugin.xml also not supported
+** Data sources: no way to override ds. If name is same, ds not overwritten, if name is different - ID inside XML also should be different; Also, webRoot should be set to {{{webRoot: __AUTODETECT__}}} because otherwise host bundle doesn't see child bundles--></item><item data-tags="Next Action Birdie-C Star Done at:2013-05-08" data-edited="1367993723034" data-title="Generate missing methods" data-created="1367989651262"><!--* getSpInfo, setSpInfo for device and gateway
+* setBoxInformation
+!! Result:
+Added--></item><item data-tags="Event Office at:2013-05-21" data-edited="1367993133484" data-title="RRU" data-created="1367993129065"><!----></item><item data-tags="Event Tikal [Jim Vopni] Star Done at:2013-05-13" data-edited="1368439230095" data-title="10:30 Fix Core split design" data-created="1367993176776"><!--TBW--></item><item data-tags="Daily at:2013-05-08" data-edited="1368006075334" data-title="Daily 13-05-08" data-created="1368006075334"><!--* Кетчуп--></item><item data-tags="Event Home Done at:2013-05-12" data-edited="1368362690810" data-title="BBQ" data-created="1368006290292"><!--!!! To [[http://tobus.jp/cgi-bin/pctimetable.cgi?act=timel&lcd=TE810125&scd=139909660000&hcd=0| Time Table]]
+* １０時: ヒ03　 08　 15　 23　 32　 41　 ヒ46　 50
+* １１時: 00　 10　 19　 ヒ24　 30　 38　 46　 54
+* １２時: 02　 ヒ07　 12　 20　 28　 37　 46　 ヒ50　 55
+!!! From [[http://tobus.jp/cgi-bin/pctimetable.cgi?act=timel&lcd=TE810125&scd=139912490000&hcd=1|Time Table]]:
+* １７時: 02　 10　 18　 26　 34　 42　 50　 58
+* １８時: 06　 15　 24　 33　 41　 51
+* １９時: 01　 11　 24　 38　 51--></item><item data-tags="Event Office at:2013-05-16" data-edited="1368057085730" data-title="9:30 劉さん Meeting" data-created="1368007052982"><!--大森1号館の5F会議室--></item><item data-tags="Event Birdie-C Star Done at:2013-05-10" data-edited="1368175543941" data-title="3:30p Task Permit仕様検討" data-created="1368007117101"><!--Not exactly the way i thought. We don't need to save data but not send, instead, we have to interrupt send process and later, when 'Run' button is clicked, run send job again. It makes implementation of first part easier, but download/preview function is harder, we have to implement this from scratch--></item><item data-tags="agileConfig systemTemplate" data-edited="1368195001964" data-title="EventDBoardTemplate" data-created="1368007754265"><!--!! Events by Date
+#{each groupTag="/^at:" noGroupTitle ="''No date''
+
+" name="itm" values="#{find reload="yes" tags="Event" tagsOp="!Done" sort="/^at:"}" template="#{tmpl ref="EventListItemTemplate"}
+
+" groupTemplate="''#{out value="group"}''
+
+"}--></item><item data-tags="agileConfig" data-edited="1368007983536" data-title="Future Events" data-created="1368007941813"><!--<<tmpl lines="yes" ref="EventDBoardTemplate">>--></item><item data-created="1368081772838" data-title="3p 振り返り" data-edited="1368084995972" data-tags="Event Birdie-C Done at:2013-05-09"><!----></item><item data-created="1368085006784" data-title="Call to Hoikuen" data-edited="1368142555506" data-tags="Event Done at:2013-05-10"><!----></item><item data-tags="Event Birdie-C Done at:2013-05-13" data-edited="1368439227101" data-title="17:00 DLU from Birdie-SE設計検討" data-created="1368142642431"><!----></item><item data-created="1368175506076" data-title="Daily 13-05-10" data-edited="1368175531002" data-tags="Daily at:2013-05-10"><!----></item><item data-created="1368242773020" data-title="Basic Documents management" data-edited="1368310240890" data-tags="Next Action Tango2 Done at:2013-05-12"><!--* add() - adds new document
+* update() - updates existing
+* remove() - removes existing
+* get(id) - searches by ID
+* query() - queries document
+* list() - transforms cursor to array
+!!! Result
+Done and tested with simple app--></item><item data-created="1368242800640" data-title="Basic syncronisation" data-edited="1368439293709" data-tags="Action [Basic Documents management] Tango2 Next"><!--* Send of history: OK
+* Receive of history
+* Receive documents when history is broken--></item><item data-created="1368242849328" data-title="Migration of Tango1" data-edited="1368310264248" data-tags="Action [Basic Documents management] Tango2 Next"><!----></item><item data-created="1368242937266" data-title="Token approve plugin" data-edited="1368242937266" data-tags="Future Action [Basic syncronisation] Tango2"><!----></item><item data-created="1368242994209" data-title="Deploy on OpenShift" data-edited="1368242994210" data-tags="Future Action [Migration of Tango1] Tango2"><!----></item><item data-created="1368243212263" data-title="Prepare Japanese CV" data-edited="1368243256645" data-tags="Waiting Action HR [Farhad Ganiyev]"><!----></item><item data-created="1368243250302" data-title="Farhad Ganiyev" data-edited="1368243250302" data-tags="Contact"><!----></item><item data-created="1368405230749" data-title="08:00 Call to Hoikuen" data-edited="1368405233137" data-tags="Event Done at:2013-05-13"><!----></item><item data-created="1368406842813" data-title="Healtcheck" data-edited="1368406856929" data-tags="Event Office at:2013-06-07"><!----></item><item data-created="1368428364426" data-title="Yury Lvov (party)" data-edited="1368428426517" data-tags="Event Home at:2013-05-25 [Yury Lvov]"><!----></item><item data-created="1368428417210" data-title="Yury Lvov" data-edited="1368428417210" data-tags="Contact"><!----></item></storage></html>

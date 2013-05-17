@@ -163,11 +163,15 @@ DocumentsDB.prototype.upgrade = function(db, t, version) {
             var documents = db.createObjectStore('documents', {keyPath: 'id'});
             documents.createIndex('conn', 'conn');
             return;
+        case 5:
+            var history = t.objectStore('history');
+            history.createIndex('order', 'order');
+            return;
         }
     };
     // 1 2 3 4 5
     // X     X
-    var own = [1];
+    var own = [1, 5];
     for (var i = 0; i < own.length; i++) {
         if (version == own[i]) {
             return ownUpgrade();
@@ -183,7 +187,7 @@ var DocumentsManager = function (conn, handler, config) {
     this.conn = conn;
     this.config = config || {};
     this._id = 0;
-    var ownVersion = 1;
+    var ownVersion = 2;
     var db = new DocumentsDB();
     db.appConfig = this.config;
     db.open('db_'+conn.code, ownVersion + (this.config.version || 0), function(err) {
@@ -207,14 +211,22 @@ DocumentsManager.prototype.sync = function(manager, handler) {
         var fetchFrom = function (cond) {
             $$.log('fetchFrom', cond);
             // Does actual fetch
-            this.list(t.objectStore('history').openCursor(cond), function (err, list) {
+            this.list(t.objectStore('history').index('order').openCursor(cond), function (err, list) {
                 $$.log('List:', list, err);
                 if (err) {
                     return finish(err);
                 };
                 compressHistory(list, {max: 10000}, {
                     document: function (id, handler) {
-                        this.db.execRequest(t.objectStore('documents').get(id), handler);
+                        this.db.execRequest(t.objectStore('documents').get(id), function(err, res) {
+                            if (err) {
+                                return handler(err);
+                            };
+                            if (res) {
+                                return handler(null, JSON.stringify(res));
+                            };
+                            return handler();
+                        });
                     }.bind(this)
                 }, function (err, result) {
                     sendHistory(result);
@@ -228,7 +240,7 @@ DocumentsManager.prototype.sync = function(manager, handler) {
             };
             if (result) {
                 // Found
-                fetchFrom(IDBKeyRange.lowerBound(result.id, true));
+                fetchFrom(IDBKeyRange.lowerBound(result.order, true));
             } else {
                 // Not found - first item in history
                 req = t.objectStore('history').index('tstamp').openCursor();
@@ -241,7 +253,7 @@ DocumentsManager.prototype.sync = function(manager, handler) {
                         // No data in history?
                         return fetchFrom('');
                     };
-                    fetchFrom(IDBKeyRange.lowerBound(result.value.id, false));
+                    fetchFrom(IDBKeyRange.lowerBound(result.value.order, false));
                 }.bind(this));
             };
         }.bind(this));
@@ -263,8 +275,104 @@ DocumentsManager.prototype.sync = function(manager, handler) {
         }.bind(this));
         // Compress and sends history to server
     }.bind(this);
+    var saveHistory = function (data) {
+        // Opens transaction, saves documents and history
+        var t = this.db.update('history', 'documents');
+        var saveMarker = function (marker) {
+            // savesMarker in db
+            $$.log('Saving marker:', marker);
+            this.conn.marker = marker;
+            manager.updateConnection(this.conn, function (err) {
+                if (err) {
+                    return finish(err);
+                };
+                receiveHistory(marker);
+            }.bind(this))
+            
+        }.bind(this);
+        var nextItem = function (index) {
+            if (index>=data.data.length) {
+                // Finish
+                if (data.data.length == 0) {
+                    // No data = sync done
+                    return finish(null);
+                };
+                return saveMarker(data.data[data.data.length-1].id); // Last history ID
+            };
+            item = data.data[index];
+            $$.log('Save', item);
+            var doc = item.doc;
+            var updateDoc = function (err) {
+                // Modify document
+                var onDone = function  (err) {
+                    if (err) {
+                        return finish(err);
+                    };
+                    nextItem(index+1);
+                }.bind(this);
+                if (item.operation == 2) {
+                    // Remove document
+                    $$.log('Remove', item);
+                    return this.db.execRequest(t.objectStore('documents').delete(item.doc_id), onDone);
+                };
+                if (doc) {
+                    $$.log('Update', item, doc);
+                    // Have document
+                    this.db.execRequest(t.objectStore('documents').put(JSON.parse(doc)), onDone);
+                } else {
+                    // No action
+                    onDone(null);
+                }
+            }.bind(this);
+            this.db.execRequest(t.objectStore('history').get(item.id), function (err, h) {
+                if (err) {
+                    return finish(err);
+                };
+                // Existing history item or not?
+                if (h) {
+                    // Update tstamp
+                    h.tstamp = item.tstamp;
+                    this.db.execRequest(t.objectStore('history').put(h), updateDoc);
+                } else {
+                    // Insert new
+                    if (item.doc) {
+                        delete item.doc;
+                    };
+                    item.order = this.id(); // This is to make sure we have correct order of future history items
+                    this.db.execRequest(t.objectStore('history').add(item), updateDoc);
+                }
+            }.bind(this));
+        }.bind(this);
+        if (data.clean) {
+            // Cleanup DB
+            this.db.execRequest(t.objectStore('documents').clear(), function (err) {
+                // Cleared
+                if (err) {
+                    return finish(err);
+                };
+                this.db.execRequest(t.objectStore('history').clear(), function (err) {
+                    // Cleared
+                    if (err) {
+                        return finish(err);
+                    };
+                    nextItem(0);
+                }.bind(this));
+            }.bind(this));
+        } else {
+            // Just incremental update
+            nextItem(0);
+        }
+    }.bind(this);
     var receiveHistory = function (from) {
         // Receives history and applies changes to own DB, saves marker
+        $$.log('Receiving history from:', from);
+        manager.receiveHistory(this.conn, {from: from}, function (err, data) {
+            if (err) {
+                return finish(err);
+            };
+            $$.log('Received:', data);
+            saveHistory(data);
+        }.bind(this));
     }.bind(this);
     prepareOwnHistory(this.conn.marker);
 };
@@ -301,11 +409,12 @@ DocumentsManager.prototype.list = function(req, handler) {
             return handler(err);
         };
         if (cursor) {
-            result.push(cursor.value);
-            cursor.continue();
-        } else {
-            handler(null, result);
-        }
+            result.push(cursor.value || cursor);
+            if (cursor.continue) {
+                return cursor.continue();
+            };
+        };
+        handler(null, result);
     });
 };
 
@@ -332,6 +441,7 @@ DocumentsManager.prototype.add = function(doc, handler) {
             version: doc.version,
             operation: 0, // Add
             tstamp: this.id(),
+            order: this.id(),
             doc_id: doc.id
         };
         t.objectStore('history').add(history);
@@ -364,6 +474,7 @@ DocumentsManager.prototype.update = function(doc, handler) {
             from_version: old_version,
             operation: 1, // Update
             tstamp: this.id(),
+            order: this.id(),
             doc_id: doc.id
         };
         t.objectStore('history').add(history);
@@ -395,6 +506,7 @@ DocumentsManager.prototype.remove = function(doc, handler) {
             version: this.conn.client+this.id(),
             from_version: old_version,
             operation: 2, // Remove
+            order: this.id(),
             tstamp: this.id(),
             doc_id: doc.id
         };
@@ -501,6 +613,16 @@ SitesManager.prototype._addConnection = function(conn, handler) {
     this.db.execTransaction(t, handler);
     try {
         t.objectStore('connections').add(conn);
+    } catch (e) {
+        handler('DB Error: '+e);
+    }
+};
+
+SitesManager.prototype.updateConnection = function(conn, handler) {
+    var t = this.db.update('connections');
+    this.db.execTransaction(t, handler);
+    try {
+        t.objectStore('connections').put(conn);
     } catch (e) {
         handler('DB Error: '+e);
     }
