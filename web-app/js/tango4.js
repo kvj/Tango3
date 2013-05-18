@@ -334,7 +334,9 @@ BrowserPanel.prototype.selectItem = function(item) {
 			return app.showError(err);
 		};
 		this.selected = item;
-		this.app.refreshPane(this.div, this.items, items);		
+		this.app.refreshPane(this.div, this.items, items, {
+			selected: item? item.id: null
+		});		
 	}.bind(this));
 };
 
@@ -584,7 +586,7 @@ App.prototype.itemRecursive = function(item, cb, handler) {
 	});
 };
 
-App.prototype.renderItem = function(item, parent) {
+App.prototype.renderItem = function(item, parent, config) {
 	var div = this.el('div', parent, {
 		'class': 'card'
 	});
@@ -612,13 +614,36 @@ App.prototype.renderItem = function(item, parent) {
 	var bodyDiv = this.el('div', wrapper, {
 		'class': 'card_body'
 	});
+	if (item.id == config.selected) {
+		// Render selected item
+		var floatPanel = this.el('div', bodyDiv, {
+			'class': 'card_float_panel'
+		});
+		var editButton = this.el('button', floatPanel, {
+			'class': 'item_button'
+		}, 'Edit');
+		editButton.addEventListener('click', function (evt) {
+			if (!inEdit) {
+				edit();
+			};
+		}.bind(this));
+		var addButton = this.el('button', floatPanel, {
+			'class': 'item_button'
+		}, 'Add');
+		addButton.addEventListener('click', function (evt) {
+			this.createNewItem(item);
+		}.bind(this));
+	};
+	var bodyContentsDiv = this.el('div', bodyDiv, {
+		'class': 'card_body_contents'
+	});
 	var bottomDiv = this.el('div', wrapper, {
 		'class': 'card_bottom'
 	});
 	var inEdit = false;
 	var render = function () {
 		this.text(titleTextDiv, item.title || '<No title>');
-		this.text(bodyDiv, item.body);
+		this.text(bodyContentsDiv, item.body);
 	}.bind(this);
 	render();
 	var edit = function () {
@@ -758,12 +783,13 @@ App.prototype.renderItem = function(item, parent) {
 	}.bind(this);
 };
 
-App.prototype.refreshPane = function(parent, array, data) {
+App.prototype.refreshPane = function(parent, array, data, config) {
+	var conf = config || {};
 	this.removeItems(parent, array);
 	array.splice(0, array.length);
 	for (var i = 0; i < data.length; i++) {
 		var item = data[i];
-		array.push({item: item, handler: this.renderItem(item, parent)});
+		array.push({item: item, handler: this.renderItem(item, parent, conf)});
 	};
 	this.el('div', parent, {
 		'class': 'clear'
