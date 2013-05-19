@@ -42,6 +42,10 @@ body {
 	box-shadow: 1px 1px 1px #888888;
 }
 
+.layout_narrow .card {
+	width: 95%;
+}
+
 .card_title {
 	padding: 0.2em;
 	background-color: #dddddd;
@@ -106,6 +110,56 @@ body {
 	font-size: 0.8em;
 	background-color: #eeeeee;
 	border: 1px solid #888888;
+}
+
+.item_table {
+	border-collapse: collapse;
+	width: 100%;
+	padding: 0;
+}
+
+.item_td {
+	position: relative;
+	margin: 0.1em;
+}
+
+.item_tr {
+	height: 1.2em;
+}
+
+.item_td_edit {
+	cursor: pointer;
+}
+
+.item_td_edit:hover {
+	background-color: #efefef;
+}
+
+.item_td_edit_selected {
+	background-color: #eeeeee;
+	overflow: visible;
+}
+
+.item_td_text_edit {
+	font-size: 1em;
+}
+
+.item_td_editor {
+	padding-right: 0.8em;
+}
+
+.td_float_panel {
+	font-size: 1.3em;
+	position: absolute;
+	right: 0;
+	top: 0;
+	padding: 0.2em;
+	display: none;
+	z-index: 1;
+}
+
+.item_td_edit_selected .td_float_panel {
+	display: block;
 }
 
 .clear {

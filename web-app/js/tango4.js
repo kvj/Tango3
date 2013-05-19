@@ -2,6 +2,18 @@ document.addEventListener('DOMContentLoaded', function () {
 	var app = new App();
 });
 
+if (typeof String.prototype.startsWith != 'function') {
+    String.prototype.startsWith = function (str){
+        return this.slice(0, str.length) == str;
+    };
+};
+
+if (typeof String.prototype.endsWith != 'function') {
+    String.prototype.endsWith = function (str){
+        return this.slice(-str.length) == str;
+    };
+};
+
 var EventEmitter = function(emitter) {//Creates new event emitter
     this.events = {};
     this.emitter = emitter;
@@ -130,7 +142,7 @@ App.prototype.resize = function() {
 	var inEm = this.pxInEm(document.body);
 	var ems = Math.floor(document.body.offsetWidth / inEm);
 	var newLayout = 'wide';
-	if (ems<40) {
+	if (ems<30) {
 		newLayout = 'narrow';
 	};
 	if (this.layoutType != newLayout) {
@@ -220,8 +232,10 @@ App.prototype.refreshSyncControls = function() {
 		}, db.conn.code);
 		button.addEventListener('click', function (evt) {
 			button.disabled = true;
+			this.text(button, 'Sync...');
 			db.sync(this.manager, function (err) {
 				button.disabled = false;
+				this.text(button, db.conn.code);
 				if (err) {
 					this.showError(err);
 				};
@@ -276,6 +290,7 @@ var BrowserPanel = function (app, div) {
 	this.items = [];
 	this.div.addEventListener('dblclick', function (evt) {
 		// Add new item to currently selected item
+		window.getSelection().removeAllRanges();
 		app.createNewItem(this.selected);
 		evt.preventDefault();
 		evt.stopPropagation();
@@ -586,6 +601,245 @@ App.prototype.itemRecursive = function(item, cb, handler) {
 	});
 };
 
+App.prototype.renderText = function(text, div, handler) {
+	var span = this.el('span', div, {
+	}, text);
+	handler();
+};
+
+App.prototype.renderGrid = function(config, div, handler) {
+	var table = this.el('table', div, {
+		'class': 'item_table'
+	});
+	var removeSelection = function () {
+		var nl = table.querySelectorAll('.item_td_edit_selected');
+		for (var i = 0; i < nl.length; i++) {
+			nl[i].classList.remove('item_td_edit_selected');
+		};
+		var nl = table.querySelectorAll('.item_tr_editor');
+		for (var i = 0; i < nl.length; i++) {
+			nl[i].parentNode.removeChild(nl[i]);
+		};
+	};
+	var maxCells = 1;
+	var renderCell = function (td, col, rowNum, colNum) {
+		this.renderText(col.text || '', td, function () {
+			// No action
+		});
+		var renderEditor = function (type) {
+			removeSelection();
+			var tr = td.parentNode;
+			var etr = this.el('tr', null, {
+				'class': 'item_tr_editor'
+			});
+			if (tr.nextSibling) {
+				tr.parentNode.insertBefore(etr, tr.nextSibling);
+			} else {
+				// Last tr
+				tr.parentNode.appendChild(etr);
+			}
+			var etd = this.el('td', etr, {
+				colspan: maxCells,
+				'class': 'item_td_editor'
+			});
+			var etext = this.el('input', etd, {
+				'type': 'text',
+				'class': 'item_edit_text item_td_text_edit',
+				'value': type == 'edit'? col.text: '' 
+			});
+			etext.addEventListener('keydown', function (evt) {
+				if (evt.keyCode == 13) {
+					// Finished
+					handler(type, col, etext.value);
+					return false;
+				};
+				if (evt.keyCode == 27) {
+					// Cancel
+					select();
+					return false;
+				};
+			})
+			etext.focus();
+		}.bind(this);
+		var select = function () {
+			removeSelection();
+			td.classList.add('item_td_edit_selected');
+		}.bind(this);
+		var floatPanel = null;
+		if (col.edit || col.remove || col.add) {
+			// Editable
+			td.classList.add('item_td_edit');
+			floatPanel = this.el('div', td, {
+				'class': 'td_float_panel'
+			});
+			td.addEventListener('click', function (evt) {
+				select();
+				evt.stopPropagation();
+			});
+		};
+		if (col.add) {
+			// Can edit with simple one-line text box
+			var addButton = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Add');
+			addButton.addEventListener('click', function (evt) {
+				renderEditor('add');
+				evt.stopPropagation();
+			}.bind(this));
+		};
+		if (col.edit) {
+			// Can edit with simple one-line text box
+			var editButton = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Edit');
+			editButton.addEventListener('click', function (evt) {
+				renderEditor('edit');
+				evt.stopPropagation();
+			}.bind(this));
+			td.addEventListener('dblclick', function (evt) {
+				window.getSelection().removeAllRanges();
+				renderEditor('edit');
+				evt.preventDefault();
+				evt.stopPropagation();
+			});
+		};
+		if (col.remove) {
+			// Can edit with simple one-line text box
+			var removeButton = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Remove');
+			removeButton.addEventListener('click', function (evt) {
+				handler('remove', col);
+				evt.stopPropagation();
+			}.bind(this));
+		};
+	}.bind(this);
+	for (var i = 0; i < config.rows.length; i++) {
+		var row = config.rows[i];
+		var tr = this.el('tr', table, {
+			'class': 'item_tr'
+		});
+		var cells = 0;
+		for (var j = 0; j < row.cols.length; j++) {
+			var col = row.cols[j];
+			var cl = 'item_td';
+			if (col.align == 'r') {
+				cl += ' align_r';
+			};
+			if (col.align == 'c') {
+				cl += ' align_c';
+			};
+			var td = this.el('td', tr, {
+				'class': cl
+			});
+			if (col.span>1) {
+				td.colspan = col.span;
+				cells += col.span;
+			} else {
+				cells++;
+			}
+			renderCell(td, col, i, j);
+		};
+		if (cells>maxCells) {
+			maxCells = cells;
+		};
+	};
+};
+
+App.prototype.saveBlocks = function(blocks, handler) {
+	var result = '';
+	var index = 0;
+	iterateOver(blocks, function (block, cb) {
+		// Save block
+		if (block.type == 'block') {
+			if (index>0) {
+				result += '\n';
+			};
+			result += '#begin';
+			if (block.params && block.params.length>0) {
+				result += ' ';
+				result += block.params.join(' ');
+			};
+			index++;
+		};
+		for (var j = 0; j < block.lines.length; j++) {
+			var line = block.lines[j]
+			if (index>0) {
+				result += '\n';
+			};
+			result += line;
+			index++;
+		};
+		if (block.type == 'block') {
+			result += '\n#end';
+			index++;
+		};
+		cb(null);
+	}.bind(this), function () {
+		handler(result);
+	});
+};
+
+App.prototype.parseLines = function(text, handler) {
+	// Parses lines into array of parts (text blocks or #begin #end blocks)
+	var block = null;
+	var blocks = [];
+	var lines = (text || '').split('\n');
+	for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		if (line.startsWith('#begin') && (!block || block.type != 'block')) {
+			// New block
+			if (block) {
+				blocks.push(block);
+			};
+			var params = line.split(' ');
+			params.shift();
+			block = {
+				type: 'block',
+				params: params,
+				lines: []
+			};
+			continue;
+		};
+		if (line.trim() == '#end' && (block && block.type == 'block')) {
+			// End of block
+			blocks.push(block);
+			block = null;
+			continue;
+		};
+		// Just line
+		if (!block) {
+			block = {
+				type: 'text',
+				lines: []
+			};
+		};
+		block.lines.push(line);
+	};
+	if (block) {
+		blocks.push(block);
+	};
+	return handler(blocks);
+};
+
+App.prototype.gridHandler = function(blocks, grid, div, handler) {
+	// Manages grid modifications
+	return this.renderGrid(grid, div, function (type, col, text) {
+		// Update
+		var block = blocks[col.b];
+		if (type == 'add') {
+			block.lines.splice(col.l+1, 0, text);
+		};
+		if (type == 'remove') {
+			block.lines.splice(col.l, 1);
+		};
+		if (type == 'edit') {
+			block.lines[col.l] = text;
+		};
+		handler(blocks, type);
+	}.bind(this));
+};
+
 App.prototype.renderItem = function(item, parent, config) {
 	var div = this.el('div', parent, {
 		'class': 'card'
@@ -642,8 +896,46 @@ App.prototype.renderItem = function(item, parent, config) {
 	});
 	var inEdit = false;
 	var render = function () {
+		var blocksToText = function (blocks) {
+			var grid = {
+				rows: []
+			};
+			for (var i = 0; i < blocks.length; i++) {
+				var block = blocks[i];
+				if (block.type == 'text') {
+					for (var j = 0; j < block.lines.length; j++) {
+						var line = block.lines[j];
+						grid.rows.push({
+							cols: [{
+								text: line,
+								add: true,
+								edit: true,
+								remove: true,
+								b: i,
+								l: j
+							}]
+						});
+					};
+				};
+			};
+			return grid;
+		};
 		this.text(titleTextDiv, item.title || '<No title>');
-		this.text(bodyContentsDiv, item.body);
+		this.text(bodyContentsDiv);
+		this.parseLines(item.body, function (blocks) {
+			// By default, render grid with one row per line
+			var grid = blocksToText(blocks);
+			this.gridHandler(blocks, grid, bodyContentsDiv, function () {
+				// Rendered
+				this.saveBlocks(blocks, function (text) {
+					item.updated = new Date().getTime();
+					item.body = text;
+					this.updateItem(item, function () {
+						render();
+					}.bind(this));
+				}.bind(this));
+			}.bind(this));
+		}.bind(this));
 	}.bind(this);
 	render();
 	var edit = function () {
@@ -746,6 +1038,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		}.bind(this));
 	}.bind(this);
 	bodyDiv.addEventListener('dblclick', function (evt) {
+		window.getSelection().removeAllRanges();
 		if (!inEdit) {
 			edit();
 		};
