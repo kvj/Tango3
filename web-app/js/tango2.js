@@ -531,13 +531,20 @@ SitesManager.prototype.defaultConnection = function() {
     var reg = /(.*\/)([a-z0-9]+)\.wiki\.html($|#)/i;
     var m = window.location.toString().match(reg);
     if(!m) {
+        var path = window.localStorage['default_conn'];
+        if (path) {
+            m = path.match(reg);
+            if (m) {
+                return {url: m[1], code: m[2]};
+            }
+        };
         var id = window.prompt('Please enter Container URL:');
         if (!id) {
             return null;
         };
         m = id.match(reg);
         if (m) {
-            return {url: m[1], code: m[2]};
+            return {url: m[1], code: m[2], path: id};
         }
         return null;
     } else {
@@ -648,6 +655,14 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                     token: data.token,
                     client: data.client
                 };
+                var addConnectionDone = function (err) {
+                    $$.log('_addConnection', err);
+                    if (!err && conn.path) {
+                        // Created, but user entrered URL
+                        window.localStorage['default_conn'] = conn.path;
+                    };
+                    handler(err, newData);
+                }.bind(this);
                 if (!data.found) {
                     // Create new 
                     if (!window.confirm('Do you want to create new Container?')) {
@@ -660,10 +675,7 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                         };
                         newData.token = data.token;
                         newData.client = data.client;
-                        this._addConnection(newData, function (err) {
-                            $$.log('_addConnection', err);
-                            handler(err, newData);
-                        });
+                        this._addConnection(newData, addConnectionDone);
                         // Add
                     }.bind(this));
                 } else {
@@ -675,10 +687,7 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                         };
                         newData.token = data.token;
                         newData.client = data.client;
-                        this._addConnection(newData, function (err) {
-                            $$.log('_addConnection', err);
-                            handler(err, newData);
-                        });
+                        this._addConnection(newData, addConnectionDone);
                         // Add
                     }.bind(this));
                 }
