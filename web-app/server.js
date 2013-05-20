@@ -9,6 +9,7 @@ var PG_PORT_DEF = '5432';
 var PG_USER_DEF = 'tango2';
 var PG_PASS_DEF = 'tango2';
 var PG_APPL_DEF = 'tango2';
+var SERVER_PORT_DEF = 3000;
 
 var express = require('express');
 var pg = require('pg');
@@ -48,8 +49,12 @@ App.prototype.initRest = function() {
     this.rest('/out', this.restOutgoingData.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
-    this.app.listen(3000);
-    this.log('Server started');
+    var port = SERVER_PORT_DEF;
+    if (process.argv.length>2) {
+        port = parseInt(process.argv[2]) || SERVER_PORT_DEF;
+    };
+    this.app.listen(port);
+    this.log('Server started on', port);
 };
 
 App.prototype.random = function (len) {
