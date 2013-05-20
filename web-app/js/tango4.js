@@ -98,6 +98,7 @@ EventEmitter.prototype.emit = function(type, evt, obj) {//Calls handlers
     };
     return true;
 };
+
 var App = function () {
 	// $$.log('App started', this.pxInEm(document.body));
 	this.wideLayout = {
@@ -132,7 +133,7 @@ var App = function () {
     }.bind(this));
 	setTimeout(function () {
 		this.resize();
-	}.bind(this), 0);
+	}.bind(this), 10);
 	this.initConnection(function () {
 		this.initUI();
 	}.bind(this));
@@ -271,6 +272,18 @@ var FreePanel = function (app, div) {
 			return false;
 		}.bind(this)
 	});
+	this.loadStarred();
+};
+
+FreePanel.prototype.loadStarred = function() {
+	// Loads all starred items to panel
+	this.app.list({starred: 1}, function (err, list) {
+		if (err) {
+			return this.app.showError(err);
+		};
+		this.items = list;
+		this.app.refreshPane(this.div, this.renders, this.items);
+	}.bind(this));
 };
 
 FreePanel.prototype.addItem = function(other) {
@@ -470,7 +483,7 @@ App.prototype.list = function(config, handler) {
 			req = store.index('parent').openCursor(config.parent);
 		};
 		if (config.starred) {
-			req = store.index('starred').openCursor(config.starred);
+			req = store.index('starred').openCursor(IDBKeyRange.lowerBound(config.starred, false));
 		};
 		if (!req) {
 			$$.log('Aborted list: no condition', config);
@@ -602,9 +615,46 @@ App.prototype.itemRecursive = function(item, cb, handler) {
 };
 
 App.prototype.renderText = function(text, div, handler) {
-	var span = this.el('span', div, {
-	}, text);
-	handler();
+	var parsers = [];
+	parsers.push(function (text, div) {
+		// Checkbox parser
+		var reg = /(.*?)\[(X| )\] (.+?)($|(\[(X| )\]))/
+		var m = text.match(reg);
+		// $$.log('Checkbox:', text, m);
+		if (!m) {
+			return false;
+		};
+		this.renderText(m[1], div, handler);
+		var checkbox = this.el('input', div, {
+			'type': 'checkbox',
+			'class': 'item_td_checkbox',
+			'checked': m[2] == 'X'? 'checked': null
+		});
+		var right = text.substr(m[1].length+4);
+		checkbox.addEventListener('click', function (evt) {
+			var checked = checkbox.checked? true: false;
+			var text = m[1] + (checked? '[X] ': '[ ] ')+right;
+			// $$.log('Handler', text);
+			handler({type: 'edit'}, text);
+			evt.stopPropagation();
+			return false;
+		})
+		this.renderText(right, div, handler);
+		return true;
+	}.bind(this));
+	var parsed = false;
+	for (var i = 0; i < parsers.length; i++) {
+		var p = parsers[i];
+		if (p(text, div)) {
+			parsed = true;
+			break;
+		}
+	};
+	if (!parsed) {
+		// Just plain text
+		var span = this.el('span', div, {
+		}, text);
+	};
 };
 
 App.prototype.renderGrid = function(config, div, handler) {
@@ -623,8 +673,8 @@ App.prototype.renderGrid = function(config, div, handler) {
 	};
 	var maxCells = 1;
 	var renderCell = function (td, col, rowNum, colNum) {
-		this.renderText(col.text || '', td, function () {
-			// No action
+		this.renderText(col.text || '', td, function (type, text) {
+			handler(type, col, text);
 		});
 		var renderEditor = function (type) {
 			removeSelection();
@@ -650,7 +700,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			etext.addEventListener('keydown', function (evt) {
 				if (evt.keyCode == 13) {
 					// Finished
-					handler(type, col, etext.value);
+					handler({type: type}, col, etext.value);
 					return false;
 				};
 				if (evt.keyCode == 27) {
@@ -709,7 +759,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 				'class': 'item_button'
 			}, 'Remove');
 			removeButton.addEventListener('click', function (evt) {
-				handler('remove', col);
+				handler({type: 'remove'}, col);
 				evt.stopPropagation();
 			}.bind(this));
 		};
@@ -824,19 +874,19 @@ App.prototype.parseLines = function(text, handler) {
 
 App.prototype.gridHandler = function(blocks, grid, div, handler) {
 	// Manages grid modifications
-	return this.renderGrid(grid, div, function (type, col, text) {
+	return this.renderGrid(grid, div, function (data, col, text) {
 		// Update
 		var block = blocks[col.b];
-		if (type == 'add') {
+		if (data.type == 'add') {
 			block.lines.splice(col.l+1, 0, text);
 		};
-		if (type == 'remove') {
+		if (data.type == 'remove') {
 			block.lines.splice(col.l, 1);
 		};
-		if (type == 'edit') {
+		if (data.type == 'edit') {
 			block.lines[col.l] = text;
 		};
-		handler(blocks, type);
+		handler(blocks, data);
 	}.bind(this));
 };
 
@@ -862,7 +912,33 @@ App.prototype.renderItem = function(item, parent, config) {
 			return false
 		}.bind(this)
 	});
-	var titleTextDiv = this.el('div', titleDiv, {
+	var starAnchor = this.el('a', titleDiv, {
+		'href': '#'
+	});
+	starAnchor.addEventListener('click', function (evt) {
+		if (item.starred) {
+			delete item.starred;
+		} else {
+			item.starred = 1;
+		}
+		item.updated = new Date().getTime();
+		this.updateItem(item, function () {
+			renderStar();
+		});
+		evt.stopPropagation();
+		return false;
+	}.bind(this));
+	var renderStar = function () {
+		if (item.starred) {
+			starAnchor.className = 'star starOn';
+			this.text(starAnchor, '★');
+		} else {
+			starAnchor.className = 'star starOff';
+			this.text(starAnchor, '☆');
+		}
+	}.bind(this);
+	renderStar();
+	var titleTextDiv = this.el('span', titleDiv, {
 		'class': 'card_title_text'
 	});
 	var bodyDiv = this.el('div', wrapper, {

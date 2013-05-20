@@ -35,7 +35,7 @@ body {
 	width: 15em;
 	max-width: 95%;
 	border: 1px solid #aaaaaa;
-	margin: 0.5em;
+	margin: 0.2em;
 	font-family: sans-serif;
 	box-sizing: border-box;
 	background-color: #ffffff;
@@ -47,7 +47,7 @@ body {
 }
 
 .card_title {
-	padding: 0.2em;
+	padding: 0.1em;
 	background-color: #dddddd;
 	cursor: pointer;
 }
@@ -164,4 +164,19 @@ body {
 
 .clear {
 	clear: both;
+}
+
+.star {
+    text-decoration: none;
+    font-size: 1.3em;
+    padding-right: 0.2em;
+    font-family: "Arial Unicode MS", Arial;
+}
+
+.starOn {
+    color: #dd8800;
+}
+
+.starOff {
+    color: #000000;
 }
