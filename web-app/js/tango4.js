@@ -159,17 +159,17 @@ App.prototype.initConnection = function(handler) {
     this.manager = new SitesManager(function(err) {
         if (err) {
             return $$.log('Error:', err);
-            return this.showError(err);
+            return this.showError(err, true);
         }
         var id = this.manager.defaultConnection();
         $$.log('ID:', id);
         if(!id) {
-            this.showError('Container not defined');
+            this.showError('Container not defined', true);
             return;
         }
         this.manager.initConnection(id, function (err, conn) {
             if (err) {
-                this.showError(err);
+                this.showError(err, true);
                 return;
             };
             $$.log('Connection is done', err, id, conn);
@@ -180,13 +180,33 @@ App.prototype.initConnection = function(handler) {
     }.bind(this));	
 };
 
+App.prototype.onDocChange = function(type, doc) {
+	this.events.emit(type, {
+		item: doc
+	});
+};
+
+App.prototype.onPending = function(start) {
+	// $$.log('Pending changed:', start);
+	var el = this.findEl('#pending_message');
+	if (start) {
+		this.text(el, 'Please wait, sync is in progress...');
+		el.className = 'blink';
+	} else {
+		el.classList.remove('blink');
+	}
+};
+
 App.prototype.initDB = function(conn, handler) {
     var db = new DocumentsManager(conn, function (err) {
         if (err) {
-            this.showError(err);
+            this.showError(err, true);
             return;
         };
         $$.log('Ready to show UI');
+        db.onDocumentSyncChange = this.onDocChange.bind(this);
+        db.onPending = this.onPending.bind(this);
+        db.autoSyncInterval = 60;
         this.dbs.push(db);
         if (handler) {
             handler(null, db);
@@ -224,14 +244,60 @@ App.prototype.db = function(item) {
 	return this.dbs[0]; // Default
 };
 
+App.prototype.renderIndicator = function(parent) {
+	var span = this.el('div', parent, {
+		'class': 'indicator'
+	});
+	return function (type) {
+		span.classList.remove('indicator_ok');
+		span.classList.remove('indicator_err');
+		if (type == 'on') {
+			span.classList.add('indicator_ok');
+		};
+		if (type == 'off') {
+			span.classList.add('indicator_err');
+		};
+	};
+};
+
 App.prototype.refreshSyncControls = function() {
 	var div = this.findEl('#sync_buttons');
 	this.text(div);
 	var buttonForSync = function (db) {
-		var button = this.el('button', div, {
+		var wrapper = this.el('div', div, {
+			'class': 'sync_block'
+		});
+		db.onPingState = function (err, data) {
+			$$.log('Ping state:', err, data);
+			if (err) {
+				pingIndicator('off');
+				this.showError(err);
+			} else {
+				if (data) {
+					pingIndicator('');
+				} else {
+					pingIndicator('on');
+				}
+			}
+		}.bind(this);
+		db.onNetworkChange = function (online) {
+			networkIndicator(online? 'on': 'off');
+		}.bind(this);
+		db.onChangeChanged = function (changed) {
+			// Called when modification is executed
+			dataIndicator(changed? 'off': 'on');
+		}
+		db.startPing({}, this.manager, function () {
+		}.bind(this));
+		var networkIndicator = this.renderIndicator(wrapper);
+		networkIndicator(db.online? 'on': 'off');
+		var pingIndicator = this.renderIndicator(wrapper);
+		var dataIndicator = this.renderIndicator(wrapper);
+		dataIndicator(db.changed? 'off': 'on');
+		var button = this.el('button', wrapper, {
 			'class': 'item_button'
 		}, db.conn.code);
-		button.addEventListener('click', function (evt) {
+		var doSync = function () {
 			button.disabled = true;
 			this.text(button, 'Sync...');
 			db.sync(this.manager, function (err) {
@@ -239,9 +305,17 @@ App.prototype.refreshSyncControls = function() {
 				this.text(button, db.conn.code);
 				if (err) {
 					this.showError(err);
-				};
+				} else {
+					this.showInfo('Sync done: '+db.conn.code);					
+				}
 			}.bind(this));
+		}.bind(this);
+		button.addEventListener('click', function (evt) {
+			doSync();
 		}.bind(this));
+		db.onAutoSync = function () {
+			doSync();
+		}.bind(this);
 	}.bind(this);
 	for (var i = 0; i < this.dbs.length; i++) {
 		var db = this.dbs[i];
@@ -249,9 +323,48 @@ App.prototype.refreshSyncControls = function() {
 	};
 };
 
-App.prototype.showError = function(message) {
+App.prototype.showMessage = function(config) {
+	var place = this.findEl('#messages_list');
+	var el = this.el('div', place, {
+		'class': 'message'
+	}, config.message || '<Undefined>');
+	if (config.type) {
+		el.classList.add('message_'+config.type);
+	};
+	var remove = function () {
+		el.classList.add('fade');
+		setTimeout(function () {
+			el.parentNode.removeChild(el);
+		}, 1000);
+	}
+	el.addEventListener('click', function (evt) {
+		remove();
+		evt.stopPropagation();
+	});
+	if (!config.timeout) {
+		config.timeout = 1500;
+	};
+	if (-1 != config.timeout) {
+		setTimeout(function () {
+			remove();
+		}, config.timeout);
+	};
+};
+
+App.prototype.showInfo = function(message) {
+	this.showMessage({
+		message: message
+	});
+};
+
+App.prototype.showError = function(message, persist) {
 	$$.log('Reported error:', message);
-	alert('Error: '+message);
+	// alert('Error: '+message);
+	this.showMessage({
+		message: message,
+		timeout: persist? -1: 0,
+		type: 'error'
+	});
 };
 
 var FreePanel = function (app, div) {
@@ -374,6 +487,7 @@ App.prototype.initUI = function() {
 	this.browser = new BrowserPanel(this, this.findEl('#right_pane'));
 	this.browser.selectItem(null);
 	this.refreshSyncControls();
+	this.showInfo('Application loaded');
 };
 
 App.prototype.enableDrop = function(div, types) {
@@ -457,8 +571,7 @@ App.prototype.createNewItem = function(parent, tags) {
 			return this.showError(err);
 		};
 		this.events.emit('add', {
-			item: item,
-			parent: parent
+			item: item
 		});
 		this.selectItem(parent);
 	}.bind(this));

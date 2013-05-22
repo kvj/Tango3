@@ -47,6 +47,7 @@ App.prototype.initRest = function() {
     this.rest('/name/create', this.restCreateName.bind(this));
     this.rest('/in', this.restIncomingData.bind(this), {token: true});
     this.rest('/out', this.restOutgoingData.bind(this), {token: true});
+    this.rest('/ping', this.restPing.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
     var port = SERVER_PORT_DEF;
@@ -237,6 +238,43 @@ App.prototype.restOutgoingData = function(ctx, handler, info) {
                     res.data = result;
                     handler(null, res);
                 }.bind(this));
+            }.bind(this));
+        }.bind(this));
+    }.bind(this));
+};
+
+App.prototype.restPing = function(ctx, handler, info) {
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        client.query('select id from history where history_id=$1', [ctx.from || null], function (err, result) {
+            if (err) {
+                done();
+                return handler('DB error');
+            };
+            // Check, was marker found or not
+            var marker = 0;
+            if (result.rows.length>0) {
+                // Found
+                marker = result.rows[0].id;
+            } else {
+                // Not found - from the begin
+                done();
+                return handler(null, {data: true});
+            };
+            client.query('select client, operation, document_id, history_id, id, version, from_version, created from history where id>$1 and site_id=$2 order by id limit $3', [marker, info.site_id, 1], function (err, result) {
+                done();
+                if (err) {
+                    return handler('DB error');
+                };
+                if (result.rows.length>0) {
+                    // Found
+                    return handler(null, {data: true});
+                } else {
+                    // Not found - from the begin
+                    return handler(null, {data: false});
+                };
             }.bind(this));
         }.bind(this));
     }.bind(this));

@@ -187,26 +187,159 @@ var DocumentsManager = function (conn, handler, config) {
     this.conn = conn;
     this.config = config || {};
     this._id = 0;
+    this.pending = [];
+    this.insync = false;
+    this.changed = false;
+    this.autoSyncInterval = 0;
     var ownVersion = 2;
     var db = new DocumentsDB();
     db.appConfig = this.config;
     db.open('db_'+conn.code, ownVersion + (this.config.version || 0), function(err) {
         if (!err) {
             this.db = db;
+            this.initBrowserHandlers();
         };
-        return handler(err);
+        handler(err);
+    }.bind(this));
+};
+
+DocumentsManager.prototype.onNetworkChange = function(online) {
+    // body...
+};
+
+DocumentsManager.prototype.onVisibilityChange = function(visible) {
+    // body...
+};
+
+DocumentsManager.prototype.initBrowserHandlers = function() {
+    this.changeHandler = function () {};
+    this.online = true;
+    // $$.log('Browser:', navigator.onLine, document.hidden, document.webkitHidden);
+    if (typeof(navigator.onLine) != 'undefined') {
+        this.online = navigator.onLine || false;
+        window.addEventListener('online', function (evt) {
+            this.online = true;
+            this.onNetworkChange(this.online);
+        }.bind(this));
+        window.addEventListener('offline', function (evt) {
+            this.online = false;
+            this.onNetworkChange(this.online);
+        }.bind(this));
+    };
+    var isHidden = function () {
+        if (typeof(document.hidden) != 'undefined') {
+            return document.hidden;
+        };
+        return document.webkitHidden;
+    };
+    this.hidden = false;
+    // $$.log('hidden', typeof(isHidden()));
+    if (typeof(isHidden()) != 'undefined') {
+        this.hidden = isHidden();
+        var handler = function (evt) {
+            this.hidden = isHidden();
+            // $$.log('visibilitychange', this.hidden);
+            this.onVisibilityChange(!this.hidden);
+        }.bind(this);
+        document.addEventListener('visibilitychange', handler);
+        document.addEventListener('webkitvisibilitychange', handler);
+    };
+    this.onNetworkChange(this.online);
+    this.onVisibilityChange(!this.hidden);
+};
+
+DocumentsManager.prototype.onDocumentSyncChange = function(type, doc) {
+    // Clients can override and update what's on the screen
+};
+
+DocumentsManager.prototype.onPingState = function(err, data) {
+    // body...
+};
+
+DocumentsManager.prototype.startPing = function(config, manager, handler) {
+    var fastPing = (config.fast || 60)*1000;
+    var slowPing = (config.slow || 600)*1000;
+    var stopPing = function () {
+        if (this.pingID) {
+            clearTimeout(this.pingID);
+            this.pingID = null;
+        };
+    }.bind(this);
+    stopPing();
+    var isSlow = function () {
+        if (!this.online || this.hidden) {
+            return true;
+        };
+        return false;
+    }.bind(this);
+    this.changeHandler = function (message) {
+        if (message == 'sync') {
+            // Sync done
+            stopPing();
+            this.onPingState(null, false); // No new data
+            schedulePing(); // Re-schedule
+        };
+    }.bind(this);
+    var schedulePing = function () {
+        this.pingID = setTimeout(function () {
+            this.pingID = null;
+            return runPing();
+        }.bind(this), isSlow()? slowPing: fastPing);
+    }.bind(this);
+    var runPing = function () {
+        if (!this.online) {
+            this.onPingState('Offline');
+            schedulePing();
+            return;
+        }
+        this.ping(manager, function (err, data) {
+            if (err) {
+                this.onPingState(err);
+            } else {
+                this.onPingState(null, data.data);
+                if (data.data) {
+                    // Have data
+                    handler();
+                };
+            };
+            schedulePing();
+        }.bind(this));
+        // $$.log('Scheduling ping:', isSlow());
+    }.bind(this);
+    runPing();
+};
+
+DocumentsManager.prototype.ping = function(manager, handler) {
+    var marker = this.conn.marker;
+    if (this.insync) {
+        return handler(null, {data: false});
+    };
+    manager.ping(this.conn, marker, function (err, data) {
+        handler(err, data);
     }.bind(this));
 };
 
 DocumentsManager.prototype.sync = function(manager, handler) {
+    if (this.insync) {
+        return handler(); // Already in sync
+    };
+    this.insync = true;
     var finish = function (err) {
+        // setTimeout(function () {
+        this.insync = false;
+        if (!err) {
+            this.setChanged(false);
+            this.changeHandler('sync'); // Sync done - re-schedule ping
+        };
+        this.resumePending();
         $$.log('Sync finish:', err);
         // Finishes sync with error
         return handler(err);
+        // }.bind(this), 10000);
     }.bind(this);
     var prepareOwnHistory = function (from) {
-        $$.log('prepareOwnHistory', from);
         // Fetches history from DB as a list, by marker
+        // $$.log('prepareOwnHistory', from);
         var t = this.db.fetch('history', 'documents');
         var fetchFrom = function (cond) {
             $$.log('fetchFrom', cond);
@@ -259,10 +392,10 @@ DocumentsManager.prototype.sync = function(manager, handler) {
         }.bind(this));
     }.bind(this);
     var sendHistory = function (history) {
-        $$.log('sendHistory', history);
+        // $$.log('sendHistory', history);
         var data = {data: history};
         manager.sendHistory(this.conn, data, function (err, data) {
-            $$.log('sendHistory result:', err, data);
+            // $$.log('sendHistory result:', err, data);
             if (err) {
                 return finish(err);
             };
@@ -280,7 +413,7 @@ DocumentsManager.prototype.sync = function(manager, handler) {
         var t = this.db.update('history', 'documents');
         var saveMarker = function (marker) {
             // savesMarker in db
-            $$.log('Saving marker:', marker);
+            // $$.log('Saving marker:', marker);
             this.conn.marker = marker;
             manager.updateConnection(this.conn, function (err) {
                 if (err) {
@@ -304,21 +437,28 @@ DocumentsManager.prototype.sync = function(manager, handler) {
             var doc = item.doc;
             var updateDoc = function (err) {
                 // Modify document
+                var opType = '';
+                var opDoc = {};
                 var onDone = function  (err) {
                     if (err) {
                         return finish(err);
                     };
+                    this.onDocumentSyncChange(opType, opDoc);
                     nextItem(index+1);
                 }.bind(this);
                 if (item.operation == 2) {
                     // Remove document
+                    opType = 'remove';
                     $$.log('Remove', item);
+                    opDoc = {id: item.doc_id};
                     return this.db.execRequest(t.objectStore('documents').delete(item.doc_id), onDone);
                 };
                 if (doc) {
+                    opType = 'update';
+                    opDoc = JSON.parse(doc);
                     $$.log('Update', item, doc);
                     // Have document
-                    this.db.execRequest(t.objectStore('documents').put(JSON.parse(doc)), onDone);
+                    this.db.execRequest(t.objectStore('documents').put(opDoc), onDone);
                 } else {
                     // No action
                     onDone(null);
@@ -386,6 +526,27 @@ DocumentsManager.prototype.id = function() {
     return id;
 };
 
+DocumentsManager.prototype.onPending = function(start) {
+    // By default, no action, will be resumed after sync
+};
+
+DocumentsManager.prototype.resumePending = function() {
+    // Resumes pending operations
+    if (this.pending.length == 0) {
+        return false;
+    };
+    this.onPending(false);
+    for (var i = 0; i < this.pending.length; i++) {
+        var obj = this.pending[i];
+        try {
+            this[obj.type].apply(this, obj.args);
+        } catch (e) {
+            $$.log('Error in pending:', e);
+        }
+    };
+    this.pending = [];
+};
+
 DocumentsManager.prototype.beforeEdit = function(type, doc, handler) {
     // Checks if it's OK to edit
     // var cb = handler || function () {};
@@ -394,7 +555,21 @@ DocumentsManager.prototype.beforeEdit = function(type, doc, handler) {
     //     cb('Not synchronized');
     //     return false;
     // };
-    // TODO: Add lock when sync is active
+    if (this.insync) {
+        // In sync, have to save to pending
+        if (this.pending.length == 0) {
+            this.onPending(true);
+        };
+        var obj = {
+            type: type,
+            args: []
+        };
+        for (var i = 1; i < arguments.length; i++) {
+            obj.args.push(arguments[i]);
+        };
+        this.pending.push(obj);
+        return false;
+    };
     return true;
 };
 
@@ -418,6 +593,34 @@ DocumentsManager.prototype.list = function(req, handler) {
     });
 };
 
+DocumentsManager.prototype.onChangeChanged = function(changed) {
+    // Called when changed modified
+};
+
+DocumentsManager.prototype.onAutoSync = function(changed) {
+    // Called when changed auto-sync is triggered
+};
+
+DocumentsManager.prototype.setChanged = function(changed) {
+    if ((this.changed && !changed) || (!this.changed && changed)) {
+        this.onChangeChanged(changed);
+    };
+    this.changed = changed || false;
+    if (this.autoSyncID) {
+        clearTimeout(this.autoSyncID);
+        this.autoSyncID = null;
+    };
+    if (this.changed && this.autoSyncInterval>0) {
+        // Changed and autoSyncInterval is set
+        this.autoSyncID = setTimeout(function () {
+            if (this.changed && !this.insync && this.autoSyncInterval>0) {
+                // Sync still needed
+                this.onAutoSync();
+            };
+        }.bind(this), this.autoSyncInterval*1000);
+    };
+};
+
 DocumentsManager.prototype.add = function(doc, handler) {
     var cb = handler || function () {};
     if (!this.beforeEdit('add', doc, handler)) {
@@ -428,6 +631,9 @@ DocumentsManager.prototype.add = function(doc, handler) {
     this.db.execTransaction(t, function (err) {
         // Add done
         $$.log('Add doc finish:', err, doc);
+        if (!err) {
+            this.setChanged(true);
+        };
         cb(err, doc, history);
     }.bind(this));
     try {
@@ -461,6 +667,9 @@ DocumentsManager.prototype.update = function(doc, handler) {
     this.db.execTransaction(t, function (err) {
         // Add done
         $$.log('Update doc finish:', err, doc);
+        if (!err) {
+            this.setChanged(true);
+        };
         cb(err, doc, history);
     }.bind(this));
     try {
@@ -495,6 +704,9 @@ DocumentsManager.prototype.remove = function(doc, handler) {
     this.db.execTransaction(t, function (err) {
         // Add done
         $$.log('Remove doc finish:', err, doc);
+        if (!err) {
+            this.setChanged(true);
+        };
         cb(err, doc, history);
     }.bind(this));
     try {
@@ -598,6 +810,14 @@ SitesManager.prototype.sendHistory = function(conn, data, handler) {
 SitesManager.prototype.receiveHistory = function(conn, ctx, handler) {
     ctx.token = conn.token;
     this.rest(conn, 'rest/out', ctx, handler);
+};
+
+SitesManager.prototype.ping = function(conn, marker, handler) {
+    var data = {
+        token: conn.token,
+        from: marker || ''
+    };
+    this.rest(conn, 'rest/ping', data, handler);
 };
 
 SitesManager.prototype.getConnection = function(code, handler) {

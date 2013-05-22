@@ -29,6 +29,105 @@ body {
 	margin: 0.2em;
 }
 
+.fade {
+    animation-duration: 1s;
+    animation-name: fade;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: fade;
+}
+
+@keyframes fade {
+    from {
+        opacity: 1.0;
+    }
+    to {
+        opacity: 0.0;
+    }
+}
+
+@-webkit-keyframes fade {
+    from {
+        opacity: 1.0;
+    }
+    to {
+        opacity: 0.0;
+    }
+}
+
+.blink {
+    display: block !important;
+    animation-duration: 1s;
+    animation-name: blink;
+    animation-iteration-count: infinite;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: blink;
+    -webkit-animation-iteration-count: infinite;
+}
+
+@keyframes blink {
+    from {
+        opacity: 1.0;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    to {
+        opacity: 1.0;
+    }
+}
+
+@-webkit-keyframes blink {
+    from {
+        opacity: 1.0;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    to {
+        opacity: 1.0;
+    }
+}
+
+#messages_list {
+	position: fixed;
+	left: 1em;
+	top: 0;
+	font-size: 0.9em;
+	font-weight: bold;
+	font-family: sans-serif;
+}
+
+.message {
+	width: 16em;
+	margin: 0.5em;
+	padding: 0.3em;
+	text-align: center;
+	color: #ffffff;
+	background-color: #336699;
+	cursor: pointer;
+}
+
+.message_error {
+	background-color: #aa2222;
+}
+
+#pending_message {
+	display: none;
+	width: 16em;
+	position: fixed;
+	top: 0;
+	left: 50%;
+	margin: 0.5em;
+	margin-left: -8em;
+	padding: 0.3em;
+	text-align: center;
+	color: #ffffff;
+	background-color: #aa2222;
+	font-size: 0.9em;
+	font-weight: bold;
+	font-family: sans-serif;
+}
+
 .card {
 	position: relative;
 	float: left;
@@ -69,6 +168,10 @@ body {
 .card_body_contents {
 	padding: 0.2em;
 	font-size: 0.8em;
+}
+
+.card_bottom {
+	min-height: 1.2em;
 }
 
 .card_float_panel {
@@ -179,4 +282,26 @@ body {
 
 .starOff {
     color: #000000;
+}
+
+.sync_block {
+	vertical-align: middle;
+}
+
+.indicator {
+	display: inline-block;
+	width: 0.5em;
+	height: 0.5em;
+	margin: 0.2em;
+	border: 1px solid #222222;
+	background-color: #dd8800;
+	vertical-align: middle;
+}
+
+.indicator_ok {
+	background-color: #008800;
+}
+
+.indicator_err {
+	background-color: #aa2222;
 }
