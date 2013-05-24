@@ -287,7 +287,9 @@ App.prototype.refreshSyncControls = function() {
 			// Called when modification is executed
 			dataIndicator(changed? 'off': 'on');
 		}
-		db.startPing({}, this.manager, function () {
+		db.startPing({
+			slow: 1800
+		}, this.manager, function () {
 		}.bind(this));
 		var networkIndicator = this.renderIndicator(wrapper);
 		networkIndicator(db.online? 'on': 'off');
@@ -375,17 +377,35 @@ var FreePanel = function (app, div) {
 	this.div.addEventListener('click', function (evt) {
 		// Reset selection
 		app.selectItem(null);
+		// this.showItems();
 	}.bind(this));
 	app.enableDrop(div, {
 		'custom/item': function (other) {
 			$$.log('Dropped on free panel:', other);
-			if (this.addItem(other)) {
-				this.app.refreshPane(this.div, this.renders, this.items);
-			};
+			app.events.emit('pin', {
+				item: other
+			});
 			return false;
 		}.bind(this)
 	});
+	app.events.on('select', function (evt) {
+		this.selectItem(evt.item);
+	}.bind(this));
+	app.events.on('pin', function (evt) {
+		if (this.addItem(evt.item)) {
+			this.showItems(evt.item);
+		};
+	}.bind(this));
+	app.events.on('unpin', function (evt) {
+		if (this.removeItem(evt.item)) {
+			this.showItems(evt.item);
+		};
+	}.bind(this));
 	this.loadStarred();
+};
+
+FreePanel.prototype.selectItem = function(item) {
+	this.showItems(item);
 };
 
 FreePanel.prototype.loadStarred = function() {
@@ -395,8 +415,15 @@ FreePanel.prototype.loadStarred = function() {
 			return this.app.showError(err);
 		};
 		this.items = list;
-		this.app.refreshPane(this.div, this.renders, this.items);
+		this.showItems();
 	}.bind(this));
+};
+
+FreePanel.prototype.showItems = function(selected) {
+	this.app.refreshPane(this.div, this.renders, this.items, {
+		selected: selected? selected.id: null,
+		unpin: true
+	});
 };
 
 FreePanel.prototype.addItem = function(other) {
@@ -408,6 +435,17 @@ FreePanel.prototype.addItem = function(other) {
 	};
 	this.items.push(other);
 	return true;
+};
+
+FreePanel.prototype.removeItem = function(other) {
+	for (var i = 0; i < this.items.length; i++) {
+		var item = this.items[i];
+		if (item.id == other.id) {
+			this.items.splice(i, 1);
+			return true;
+		};
+	};
+	return false;
 };
 
 var BrowserPanel = function (app, div) {
@@ -427,8 +465,9 @@ var BrowserPanel = function (app, div) {
 			$$.log('Dropped on browser panel:', other);
 			app.reparent(this.selected, other, function (err) {
 				if (err) {
-					this.showError(err);
+					return this.showError(err);
 				};
+				this.selectItem(this.selected);
 			}.bind(this));
 			return false;
 		}
@@ -438,9 +477,9 @@ var BrowserPanel = function (app, div) {
 	}.bind(this));
 	app.events.on('update', function (evt) {
 		if (true) {
-			if ((!this.selected && !evt.item) || (this.selected && evt.item && evt.item.id == this.selected.id)) {
-				// Current item updated
-				this.selectItem(evt.item);
+			var id = this.selected? this.selected.id : 'null';
+			if (id == evt.fromparent || id == evt.toparent) {
+				this.selectItem(this.selected);
 			};
 		};
 	}.bind(this));
@@ -476,7 +515,10 @@ BrowserPanel.prototype.selectItem = function(item) {
 		};
 		this.selected = item;
 		this.app.refreshPane(this.div, this.items, items, {
-			selected: item? item.id: null
+			selected: item? item.id: null,
+			edit: true,
+			scroll: true,
+			pin: true
 		});		
 	}.bind(this));
 };
@@ -488,6 +530,13 @@ App.prototype.initUI = function() {
 	this.browser.selectItem(null);
 	this.refreshSyncControls();
 	this.showInfo('Application loaded');
+	// this.loadApplications();
+	var button = this.el('button', this.findEl('#top_controls'), {
+		'class': 'item_button'
+	}, 'Top');
+	button.addEventListener('click', function (evt) {
+		this.browser.selectItem(null);
+	}.bind(this));
 };
 
 App.prototype.enableDrop = function(div, types) {
@@ -536,6 +585,7 @@ App.prototype.enableDrag = function(div, types) {
 			// $$.log('Set drag type:', id, value, id.substr(0, 7));
 			evt.dataTransfer.setData(id, value);
 		}
+		evt.stopPropagation();
 	});
 };
 
@@ -590,7 +640,7 @@ App.prototype.list = function(config, handler) {
 			req = store.openCursor();
 		};
 		if (config.tag) {
-			req = store.index('tags').get(config.tag);
+			req = store.index('tags').openCursor(config.tag);
 		};
 		if (config.parent) {
 			req = store.index('parent').openCursor(config.parent);
@@ -620,16 +670,17 @@ App.prototype.reparent = function(item, child, handler) {
 	// Changes parent of child to item
 	$$.log('reparent start:', item, child);
 	var doReparent = function () {
+		var oldp = child.parent;
 		if (!item) {
 			child.parent = 'null';
 		} else {
 			child.parent = item.id;
 		};
 		this.updateItem(child, function () {
-			this.events.emit('update', {
-				item: item
-			});
-		}.bind(this));
+		}.bind(this), {
+			toparent: child.parent,
+			fromparent: oldp
+		});
 	}.bind(this);
 	if (!item) {
 		doReparent();
@@ -653,22 +704,28 @@ App.prototype.reparent = function(item, child, handler) {
 App.prototype.removeItems = function(parent, array) {
 	for (var i = 0; i < array.length; i++) {
 		var item = array[i];
-		item.handler('remove');
-		var div = item.handler('div');
-		if (div) {
-			parent.removeChild(div);
+		if (item.handler('locked')) {
+			return false;
 		};
 	};
+	for (var i = 0; i < array.length; i++) {
+		var item = array[i];
+		item.handler('remove');
+	};
+	this.text(parent);
+	return true;
 };
 
-App.prototype.updateItem = function(item, handler) {
+App.prototype.updateItem = function(item, handler, event) {
 	this.db(item).update(item, function (err) {
 		if (err) {
 			this.showError(err);
 		};
-		this.events.emit('update', {
-			item: item
-		});
+		if (!event) {
+			event = {};
+		};
+		event.item = item;
+		this.events.emit('update', event);
 		handler(item);
 	}.bind(this));
 };
@@ -727,6 +784,38 @@ App.prototype.itemRecursive = function(item, cb, handler) {
 	});
 };
 
+App.prototype.renderLink = function(parent, id, config) {
+	// Renders link to item
+	var div = this.el('div', parent, {
+		'class': 'item_link'
+	}, '...');
+	if (id.startsWith('#')) {
+		// Tag rendering
+		div.classList.add('item_link_tag');
+		this.text(div, id.substr(1), true);
+		this.enableDrag(div, {'custom/item': {id: id}, 'Text': id});
+		return;
+	};
+	this.list({id: id}, function (err, list) {
+		if (err || list.length == 0) {
+			this.showError(err || 'Not found');
+			div.classList.add('item_link_err');
+			this.text(div, 'Error!', true);
+			return;
+		};
+		item = list[0];
+		div.classList.add('item_link_ok');
+		this.text(div, item.title || '<Untitled>', true);
+		div.addEventListener('click', function (evt) {
+			this.selectItem(item);
+			evt.stopPropagation();
+			return false;
+		}.bind(this));
+		this.enableDrag(div, {'custom/item': item, 'Text': '[['+item.id+']]'});
+	}.bind(this));
+
+};
+
 App.prototype.renderText = function(text, div, handler) {
 	var parsers = [];
 	parsers.push(function (text, div) {
@@ -753,6 +842,34 @@ App.prototype.renderText = function(text, div, handler) {
 			return false;
 		})
 		this.renderText(right, div, handler);
+		return true;
+	}.bind(this));
+	parsers.push(function (text, div) {
+		// Link parser
+		var reg = /(.*?)\[\[([#?a-z0-9]+)\]\](.*)/
+		var m = text.match(reg);
+		// $$.log('Checkbox:', text, m);
+		if (!m) {
+			return false;
+		};
+		this.renderText(m[1], div, handler);
+		this.renderLink(div, m[2], {
+		});
+		this.renderText(m[3], div, handler);
+		return true;
+	}.bind(this));
+	parsers.push(function (text, div) {
+		// Link parser
+		var reg = /^(!{1,3}) (.+)$/
+		var m = text.match(reg);
+		// $$.log('Checkbox:', text, m);
+		if (!m) {
+			return false;
+		};
+		var span = this.el('span', div, {
+			'class': 'item_title_'+m[1].length
+		});
+		this.renderText(m[2], span, handler);
 		return true;
 	}.bind(this));
 	var parsed = false;
@@ -783,10 +900,15 @@ App.prototype.renderGrid = function(config, div, handler) {
 		for (var i = 0; i < nl.length; i++) {
 			nl[i].parentNode.removeChild(nl[i]);
 		};
+		inEdit = false;
 	};
+	var inEdit = false;
 	var maxCells = 1;
 	var renderCell = function (td, col, rowNum, colNum) {
-		this.renderText(col.text || '', td, function (type, text) {
+		var wrapper = this.el('div', td, {
+			'class': 'item_td_wrap'
+		});
+		this.renderText(col.text || '', wrapper, function (type, text) {
 			handler(type, col, text);
 		});
 		var renderEditor = function (type) {
@@ -813,6 +935,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			etext.addEventListener('keydown', function (evt) {
 				if (evt.keyCode == 13) {
 					// Finished
+					inEdit = false; // Edit is finished
 					handler({type: type}, col, etext.value);
 					return false;
 				};
@@ -823,6 +946,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 				};
 			})
 			etext.focus();
+			inEdit = true;
 		}.bind(this);
 		var select = function () {
 			removeSelection();
@@ -832,7 +956,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (col.edit || col.remove || col.add) {
 			// Editable
 			td.classList.add('item_td_edit');
-			floatPanel = this.el('div', td, {
+			floatPanel = this.el('div', wrapper, {
 				'class': 'td_float_panel'
 			});
 			td.addEventListener('click', function (evt) {
@@ -849,6 +973,13 @@ App.prototype.renderGrid = function(config, div, handler) {
 				renderEditor('add');
 				evt.stopPropagation();
 			}.bind(this));
+			this.enableDrop(td, {
+				'custom/line': function (other) {
+					$$.log('Dropped line:', other);
+					handler({type: 'drop', id: other.id, line: other.line}, col);
+					return false;
+				}.bind(this)
+			});
 		};
 		if (col.edit) {
 			// Can edit with simple one-line text box
@@ -865,6 +996,13 @@ App.prototype.renderGrid = function(config, div, handler) {
 				evt.preventDefault();
 				evt.stopPropagation();
 			});
+			this.enableDrop(td, {
+				'custom/item': function (other) {
+					$$.log('Dropped item on line:', other);
+					handler({type: 'drop', id: other.id}, col);
+					return false;
+				}.bind(this)
+			});
 		};
 		if (col.remove) {
 			// Can edit with simple one-line text box
@@ -875,6 +1013,10 @@ App.prototype.renderGrid = function(config, div, handler) {
 				handler({type: 'remove'}, col);
 				evt.stopPropagation();
 			}.bind(this));
+			this.enableDrag(td, {
+				'custom/line': {id: config.id, line: col}, 
+				'text/plain': col.text || ''
+			});
 		};
 	}.bind(this);
 	for (var i = 0; i < config.rows.length; i++) {
@@ -907,6 +1049,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 			maxCells = cells;
 		};
 	};
+	return function (message) {
+		if (message == 'locked') {
+			return inEdit;
+		};
+	}.bind(this);
 };
 
 App.prototype.saveBlocks = function(blocks, handler) {
@@ -999,6 +1146,29 @@ App.prototype.gridHandler = function(blocks, grid, div, handler) {
 		if (data.type == 'edit') {
 			block.lines[col.l] = text;
 		};
+		if (data.type == 'drop') {
+			if (data.line) {
+				// Dropped line
+				if (!block.lines[col.l]) {
+					// Empty line - replace
+					block.lines[col.l] = data.line.text || '';
+				} else {
+					block.lines.splice(col.l+1, 0, data.line.text || '');
+				}
+				if (data.id == grid.id) {
+					// Same item - remove line
+					var index = data.line.l;
+					if (data.line.b == col.b && data.line.l>col.l) {
+						// Same block and line on bottom - be careful
+						index++;
+					};
+					blocks[data.line.b].lines.splice(index, 1);
+				};
+			} else {
+				// Dropped item
+				block.lines[col.l] += '[['+data.id+']]';
+			}
+		};
 		handler(blocks, data);
 	}.bind(this));
 };
@@ -1059,23 +1229,51 @@ App.prototype.renderItem = function(item, parent, config) {
 	});
 	if (item.id == config.selected) {
 		// Render selected item
-		var floatPanel = this.el('div', bodyDiv, {
+		var floatPanel = this.el('div', wrapper, {
 			'class': 'card_float_panel'
 		});
-		var editButton = this.el('button', floatPanel, {
-			'class': 'item_button'
-		}, 'Edit');
-		editButton.addEventListener('click', function (evt) {
-			if (!inEdit) {
-				edit();
-			};
-		}.bind(this));
-		var addButton = this.el('button', floatPanel, {
-			'class': 'item_button'
-		}, 'Add');
-		addButton.addEventListener('click', function (evt) {
-			this.createNewItem(item);
-		}.bind(this));
+		if (config.edit) {
+			var editButton = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Edit');
+			editButton.addEventListener('click', function (evt) {
+				if (!isInEdit()) {
+					edit();
+				};
+			}.bind(this));
+			var addButton = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Add');
+			addButton.addEventListener('click', function (evt) {
+				this.createNewItem(item);
+			}.bind(this));
+		};
+		if (config.pin) {
+			// Remove from free panel
+			var button = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Pin');
+			button.addEventListener('click', function (evt) {
+				this.events.emit('pin', {
+					item: item
+				});
+			}.bind(this));
+		};
+		if (config.unpin) {
+			// Remove from free panel
+			var button = this.el('button', floatPanel, {
+				'class': 'item_button'
+			}, 'Unpin');
+			button.addEventListener('click', function (evt) {
+				this.events.emit('unpin', {
+					item: item
+				});
+			}.bind(this));
+		};
+		if (config.scroll) {
+			// Scroll to element
+			this.scrollToEl(div);
+		};
 	};
 	var bodyContentsDiv = this.el('div', bodyDiv, {
 		'class': 'card_body_contents'
@@ -1083,10 +1281,44 @@ App.prototype.renderItem = function(item, parent, config) {
 	var bottomDiv = this.el('div', wrapper, {
 		'class': 'card_bottom'
 	});
+	this.enableDrop(bottomDiv, {
+		'custom/item': function (other) {
+			// Dropped tag
+			var tags = item.tags || [];
+			if (tags.indexOf(other.id) == -1 && !isInEdit()) {
+				tags.push(other.id);
+				item.updated = new Date().getTime();
+				item.tags = tags;
+				this.updateItem(item, function () {
+					render();
+				}.bind(this));
+			};
+			return false;
+		}.bind(this)
+	});
+	var tagsDiv = this.el('div', bottomDiv, {
+		'class': 'card_tags'
+	});
 	var inEdit = false;
+	var editHandlers = [];
+	var isInEdit = function () {
+		// Returns true if item is locked
+		if (inEdit) {
+			return true;
+		};
+		for (var i = 0; i < editHandlers.length; i++) {
+			var handler = editHandlers[i];
+			if (handler('locked')) {
+				return true;
+			};
+		};
+		return false;
+	}.bind(this);
 	var render = function () {
+		editHandlers = [];
 		var blocksToText = function (blocks) {
 			var grid = {
+				id: item.id,
 				rows: []
 			};
 			for (var i = 0; i < blocks.length; i++) {
@@ -1109,14 +1341,24 @@ App.prototype.renderItem = function(item, parent, config) {
 			};
 			return grid;
 		};
-		this.text(titleTextDiv, item.title || '<No title>');
+		this.text(titleTextDiv, item.title || '<No title>', true);
 		this.text(bodyContentsDiv);
+		var tags = item.tags || [];
+		this.text(tagsDiv);
+		for (var i = 0; i < tags.length; i++) {
+			var tag = tags[i];
+			this.renderLink(tagsDiv, tag, {
+			});
+		};
 		this.parseLines(item.body, function (blocks) {
 			// By default, render grid with one row per line
 			var grid = blocksToText(blocks);
-			this.gridHandler(blocks, grid, bodyContentsDiv, function () {
+			var editHandler = this.gridHandler(blocks, grid, bodyContentsDiv, function () {
 				// Rendered
 				this.saveBlocks(blocks, function (text) {
+					if (isInEdit()) {
+						return;
+					};
 					item.updated = new Date().getTime();
 					item.body = text;
 					this.updateItem(item, function () {
@@ -1124,7 +1366,9 @@ App.prototype.renderItem = function(item, parent, config) {
 					}.bind(this));
 				}.bind(this));
 			}.bind(this));
+			editHandlers.push(editHandler);
 		}.bind(this));
+		renderStar();
 	}.bind(this);
 	render();
 	var edit = function () {
@@ -1236,9 +1480,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		return false;
 	});
 	titleDiv.addEventListener('click', function (evt) {
-		if (!inEdit) {
-			this.selectItem(item);
-		};
+		this.selectItem(item);
 		evt.preventDefault();
 		evt.stopPropagation();
 		return false;
@@ -1250,7 +1492,9 @@ App.prototype.renderItem = function(item, parent, config) {
 	var onUpdate = function (evt) {
 		if (evt.item && evt.item.id == item.id) {
 			item = evt.item;
-			render();
+			if (!isInEdit()) {
+				render();
+			};
 		};
 	}.bind(this);
 	this.events.on('update', onUpdate);
@@ -1262,12 +1506,18 @@ App.prototype.renderItem = function(item, parent, config) {
 			// Unsubscribe
 			this.events.off('update', onUpdate);
 		};
+		if ('locked' == type) {
+			return isInEdit();
+		};
 	}.bind(this);
 };
 
 App.prototype.refreshPane = function(parent, array, data, config) {
 	var conf = config || {};
-	this.removeItems(parent, array);
+	if (!this.removeItems(parent, array)) {
+		// Locked
+		return false;
+	}
 	array.splice(0, array.length);
 	for (var i = 0; i < data.length; i++) {
 		var item = data[i];
@@ -1286,13 +1536,21 @@ App.prototype.pxInEm = function(el) {
 	return Number(getComputedStyle(el, "").fontSize.match(/(\d*(\.\d*)?)px/)[1]);
 };
 
-App.prototype.text = function(el, text) {
+App.prototype.text = function(el, text, softspace) {
 	var nl = el.childNodes;
 	while(nl.length>0) {
 		el.removeChild(nl.item(0));
 	}
 	if (text) {
-		el.appendChild(document.createTextNode(text));
+		var data = text;
+		if (softspace) {
+			// Add soft break
+			data = '';
+			for (var i = 0; i < text.length; i++) {
+				data += text[i]+String.fromCharCode(0x200B);
+			};
+		};
+		el.appendChild(document.createTextNode(data));
 	};
 };
 
@@ -1316,3 +1574,71 @@ App.prototype.el = function(name, parent, attr, text) {
     return el;
 }
 
+App.prototype.scrollToEl = function (el, parent) {
+    if (!el) {
+        return;
+    };
+    var p = parent || window;
+    p.scrollTo(p.scrollX, el.offsetTop);
+};
+
+App.prototype.isAppDev = function(item) {
+	return false;
+};
+
+App.prototype.loadApplications = function() {
+    var head = document.getElementsByTagName('head')[0];
+	this.apps = {};
+	this.appDev = true;
+	var getBlockText = function (block) {
+		var result = '\n';
+		for (var i = 0; i < block.lines.length; i++) {
+			var l = block.lines[i];
+			result += l+'\n';
+		};
+		return result;
+	}
+	var loadApp = function (item) {
+		// Loading application
+		this.parseLines(item.body, function (blocks) {
+			$$.log('Load app:', item, blocks);
+			for (var i = 0; i < blocks.length; i++) {
+				var block = blocks[i];
+				if (block.type == 'block' && block.params[0] == 'js') {
+					var el = document.createElement('script');
+					el.setAttribute('type', 'text/javascript');
+					if (this.isAppDev(item) && block.params[1]) {
+						// Use src
+						el.setAttribute('src', 'apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+					} else { // Default
+						el.appendChild(document.createTextNode('(function($$, appID) {'+getBlockText(block)+'}).call(this, $$, "'+item.id+'");'));
+					}
+					head.appendChild(el);
+				};
+				if (block.type == 'block' && block.params[0] == 'css') {
+            		var el;
+					if (this.isAppDev(item) && block.params[1]) {
+						// Use src
+						el = document.createElement('link');
+						el.setAttribute('rel', 'stylesheet');
+						el.setAttribute('href', 'apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+					} else { // Default
+						el = document.createElement('style');
+						el.setAttribute('type', 'text/css');
+						el.appendChild(getBlockText(block));
+					}
+					head.appendChild(el);
+				};
+			};
+		}.bind(this));
+	}.bind(this);
+	// Loads applications by tag
+	this.list({tag: '#app'}, function (err, list) {
+		if (err) {
+			return this.showError(err);
+		};
+		for (var i = 0; i < list.length; i++) {
+			loadApp(list[i]);
+		};
+	}.bind(this));
+};

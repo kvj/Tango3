@@ -29,6 +29,10 @@ body {
 	margin: 0.2em;
 }
 
+.top_controls {
+	margin: 0.2em;
+}
+
 .fade {
     animation-duration: 1s;
     animation-name: fade;
@@ -171,12 +175,19 @@ body {
 }
 
 .card_bottom {
-	min-height: 1.2em;
+	min-height: 1.3em;
+}
+
+.card_tags {
+	font-size: 0.8em;
 }
 
 .card_float_panel {
 	text-align: right;
 	padding: 0.2em;
+	position: absolute;
+	top: 0;
+	right: 0;
 }
 
 .card_edit {
@@ -215,6 +226,24 @@ body {
 	border: 1px solid #888888;
 }
 
+.item_button:active {
+	background-color: #dddddd;
+}
+
+.item_title_1 {
+	font-weight: bold;
+}
+
+.item_title_2 {
+	font-size: 1.1em;
+	font-weight: bold;
+}
+
+.item_title_3 {
+	font-size: 1.15em;
+	font-weight: bold;
+}
+
 .item_table {
 	border-collapse: collapse;
 	width: 100%;
@@ -222,8 +251,11 @@ body {
 }
 
 .item_td {
-	position: relative;
 	margin: 0.1em;
+}
+
+.item_td_wrap {
+	position: relative;
 }
 
 .item_tr {
@@ -263,6 +295,34 @@ body {
 
 .item_td_edit_selected .td_float_panel {
 	display: block;
+}
+
+.item_link {
+	display: inline-block;
+	padding: 0.1em;
+	height: 1.2em;
+	vertical-align: middle;
+	margin: 0.1em;
+	border: 1px solid #888888;
+	border-radius: 0.3em;
+	background-color: #ddddff;
+	cursor: progress;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
+.item_link_ok {
+	cursor: pointer;
+	background-color: #ddffdd;
+}
+
+.item_link_err {
+	background-color: #ddffdd;
+}
+
+.item_link_tag {
+	cursor: pointer;
+	background-color: #ddffff;
 }
 
 .clear {
