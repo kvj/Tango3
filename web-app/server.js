@@ -14,6 +14,7 @@ var SERVER_PORT_DEF = 3000;
 var express = require('express');
 var pg = require('pg');
 var common = require('./js/common');
+var cors = require('cors');
 var App = function() {
     // Math.randomize(new Date().getTime());
     this._id = 0;
@@ -42,6 +43,8 @@ App.prototype.initRest = function() {
     this.app.use('/js', express.static(__dirname + '/js'));
     this.app.use('/lib', express.static(__dirname + '/lib'));
     this.app.use('/dev', express.static(__dirname + '/dev'));
+    this.app.use(cors());
+    this.app.use(this.app.router);
     this.rest('/site/create', this.restNewApplication.bind(this));
     this.rest('/site/get', this.restGetApplication.bind(this));
     this.rest('/name/create', this.restCreateName.bind(this));
@@ -94,14 +97,14 @@ App.prototype.initDB = function(handler) {
 
 App.prototype.db = function(handler) {
     pg.connect(this.dbUrl, function (err, client, done) {
-        $$.log('Received connection', err);
+        // $$.log('Received connection', err);
         handler(err, client, done);
     });
 };
 
 App.prototype.rest = function (path, handler, config) {
     this.app.post(this.restPrefix+path, function (req, res) {
-        this.log('Incoming rest:', path, req.body);
+        // this.log('Incoming rest:', path, req.body);
         var sendOutput = function (obj) {
             res.send(obj);
         };
@@ -196,7 +199,7 @@ App.prototype.restOutgoingData = function(ctx, handler, info) {
                 // Not found - from the begin
                 res.clean = true;
             };
-            this.log('Sending history from:', marker, result);
+            // this.log('Sending history from:', marker, result);
             client.query('select client, operation, document_id, history_id, id, version, from_version, created from history where id>$1 and site_id=$2 order by id limit $3', [marker, info.site_id, 200], function (err, result) {
                 if (err) {
                     done();
@@ -281,7 +284,7 @@ App.prototype.restPing = function(ctx, handler, info) {
 };
 
 App.prototype.restIncomingData = function(data, handler, info) {
-    this.log('Incoming data:', data, info);
+    // this.log('Incoming data:', data, info);
     this.db(function (err, client, done) {
         if (err) {
             return handler('DB error');
@@ -304,7 +307,7 @@ App.prototype.restIncomingData = function(data, handler, info) {
                 return handler(null, {});
             };
             var item = data.data[index];
-            this.log('processItem', item);
+            // this.log('processItem', item);
             var documentOperation = function () {
                 var query = '';
                 var args = [];
@@ -366,7 +369,7 @@ App.prototype.restIncomingData = function(data, handler, info) {
 };
 
 App.prototype.restGetApplication = function(data, handler) {
-    this.log('restGetApplication', data, data.code);
+    // this.log('restGetApplication', data, data.code);
     this.db(function (err, client, done) {
         if (err) {
             return handler('DB error');

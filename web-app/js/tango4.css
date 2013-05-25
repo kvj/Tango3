@@ -146,7 +146,7 @@ body {
 }
 
 .layout_narrow .card {
-	width: 95%;
+	width: 100%;
 }
 
 .card_title {
@@ -309,6 +309,10 @@ body {
 	cursor: progress;
 	text-overflow: ellipsis;
 	overflow: hidden;
+}
+
+.item_link:active {
+	background-color: #aaaaaa;
 }
 
 .item_link_ok {

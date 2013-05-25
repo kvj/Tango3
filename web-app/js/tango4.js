@@ -796,14 +796,7 @@ App.prototype.renderLink = function(parent, id, config) {
 		this.enableDrag(div, {'custom/item': {id: id}, 'Text': id});
 		return;
 	};
-	this.list({id: id}, function (err, list) {
-		if (err || list.length == 0) {
-			this.showError(err || 'Not found');
-			div.classList.add('item_link_err');
-			this.text(div, 'Error!', true);
-			return;
-		};
-		item = list[0];
+	var enableClick = function (item) {
 		div.classList.add('item_link_ok');
 		this.text(div, item.title || '<Untitled>', true);
 		div.addEventListener('click', function (evt) {
@@ -812,6 +805,15 @@ App.prototype.renderLink = function(parent, id, config) {
 			return false;
 		}.bind(this));
 		this.enableDrag(div, {'custom/item': item, 'Text': '[['+item.id+']]'});
+	}.bind(this);
+	this.list({id: id}, function (err, list) {
+		if (err || list.length == 0) {
+			this.showError(err || 'Not found');
+			div.classList.add('item_link_err');
+			this.text(div, 'Error!', true);
+			return;
+		};
+		enableClick(list[0]);
 	}.bind(this));
 
 };
@@ -1209,6 +1211,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			renderStar();
 		});
 		evt.stopPropagation();
+		evt.preventDefault();
 		return false;
 	}.bind(this));
 	var renderStar = function () {
@@ -1579,7 +1582,10 @@ App.prototype.scrollToEl = function (el, parent) {
         return;
     };
     var p = parent || window;
-    p.scrollTo(p.scrollX, el.offsetTop);
+    var sto = el.offsetTop-10;
+    setTimeout(function () {
+    	p.scrollTo(p.scrollX, sto);
+    }.bind(this), 10);
 };
 
 App.prototype.isAppDev = function(item) {

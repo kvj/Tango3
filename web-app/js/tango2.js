@@ -742,7 +742,7 @@ var SitesManager = function (handler) {
 SitesManager.prototype.defaultConnection = function() {
     var reg = /(.*\/)([a-z0-9]+)\.wiki\.html($|#)/i;
     var m = window.location.toString().match(reg);
-    if(!m) {
+    if(!m || m[2] == 'user') {
         var path = window.localStorage['default_conn'];
         if (path) {
             m = path.match(reg);
@@ -771,6 +771,7 @@ SitesManager.prototype.rest = function(conn, path, obj, handler, config) {
     req.onreadystatechange = function(e) {
         if (req.readyState == 4) {
             if (200 != req.status) {
+                $$.log('Rest error:', req);
                 return handler('HTTP error: '+req.status);
             };
             try {
