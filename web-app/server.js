@@ -43,7 +43,9 @@ App.prototype.initRest = function() {
     this.app.use('/js', express.static(__dirname + '/js'));
     this.app.use('/lib', express.static(__dirname + '/lib'));
     this.app.use('/dev', express.static(__dirname + '/dev'));
-    this.app.use(cors());
+    this.app.use(cors({
+        origin: true
+    }));
     this.app.use(this.app.router);
     this.rest('/site/create', this.restNewApplication.bind(this));
     this.rest('/site/get', this.restGetApplication.bind(this));
