@@ -137,6 +137,13 @@ var App = function () {
 	this.initConnection(function () {
 		this.initUI();
 	}.bind(this));
+	this.appCache = new AppCacheManager(function (err, newVersion) {
+		$$.log('App cache:', err, newVersion);
+		if (newVersion) {
+			// Show message about it
+			this.showInfo('Reload page for new version', true);
+		};
+	}.bind(this));
 };
 
 App.prototype.resize = function() {
@@ -353,8 +360,9 @@ App.prototype.showMessage = function(config) {
 	};
 };
 
-App.prototype.showInfo = function(message) {
+App.prototype.showInfo = function(message, persist) {
 	this.showMessage({
+		timeout: persist? -1: 0,
 		message: message
 	});
 };
@@ -530,7 +538,7 @@ App.prototype.initUI = function() {
 	this.browser.selectItem(null);
 	this.refreshSyncControls();
 	this.showInfo('Application loaded');
-	// this.loadApplications();
+	this.loadApplications();
 	var button = this.el('button', this.findEl('#top_controls'), {
 		'class': 'item_button'
 	}, 'Top');
@@ -1631,7 +1639,7 @@ App.prototype.loadApplications = function() {
 					} else { // Default
 						el = document.createElement('style');
 						el.setAttribute('type', 'text/css');
-						el.appendChild(getBlockText(block));
+						el.appendChild(document.createTextNode(getBlockText(block)));
 					}
 					head.appendChild(el);
 				};

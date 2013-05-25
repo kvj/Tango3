@@ -920,6 +920,30 @@ SitesManager.prototype.initConnection = function(conn, handler) {
     }.bind(this));
 };
 
+var AppCacheManager = function (handler) {
+    if (!window.applicationCache) {
+        $$.log('No applicationCache found');
+        return;
+    };
+//    $$.log('applicationCache:', window.applicationCache);
+    window.applicationCache.addEventListener('noupdate', function (evt) {
+        $$.log('No update actually');
+        handler(null, false);
+    }.bind(this));
+    window.applicationCache.addEventListener('cached', function (evt) {
+        $$.log('Application cached first time');
+    }.bind(this));
+    window.applicationCache.addEventListener('updateready', function (evt) {
+        $$.log('Update is ready');
+        window.applicationCache.swapCache();
+        handler(null, true);
+    }.bind(this));
+    window.applicationCache.addEventListener('error', function (evt) {
+        $$.log('Failed to download update', evt);
+        handler(evt);
+    }.bind(this));
+};
+
 /*
 var db = new ConnectionsDB();
 db.open('connections', 2, function(err) {

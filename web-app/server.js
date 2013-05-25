@@ -15,6 +15,7 @@ var express = require('express');
 var pg = require('pg');
 var common = require('./js/common');
 var cors = require('cors');
+var fs = require('fs');
 var App = function() {
     // Math.randomize(new Date().getTime());
     this._id = 0;
@@ -54,6 +55,7 @@ App.prototype.initRest = function() {
     this.rest('/out', this.restOutgoingData.bind(this), {token: true});
     this.rest('/ping', this.restPing.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
+    this.app.get('/app.cache.manifest', this.htmlGetCache.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
     var port = SERVER_PORT_DEF;
     if (process.argv.length>2) {
@@ -61,6 +63,22 @@ App.prototype.initRest = function() {
     };
     this.app.listen(port);
     this.log('Server started on', port);
+    this.cacheVersion = 0;
+    this.loadAppVersion();
+};
+
+App.prototype.loadAppVersion = function() {
+    fs.readFile('app.version.txt', {
+        encoding: 'utf8'
+    }, function (err, data) {
+        if (err) {
+            this.log('Error getting app version:', err);
+        } else {
+            this.log('Type', typeof(data));
+            this.cacheVersion = data.toString().trim();
+            this.log('App version loaded:', this.cacheVersion);
+        }
+    }.bind(this));
 };
 
 App.prototype.random = function (len) {
@@ -170,7 +188,45 @@ App.prototype.log = function() {
 
 App.prototype.htmlLoadApplication = function(req, res) {
     $$.log('Load application:', req.params.code);
-    res.sendfile('tango2.html');
+    if (req.url.indexOf('?dev') != -1) {
+        // Has dev in URL - no manifest
+        res.sendfile('tango4_dev.html');
+    } else {
+        res.sendfile('tango4.html');
+    }
+};
+
+App.prototype.htmlGetCache = function(req, res) {
+    // Some text
+    var files = [
+        'js/common.js',
+        'lib/layout.js',
+        'js/tango4.css',
+        'js/tango2.js',
+        'js/tango4.js'
+    ];
+    var noCacheFiles = [
+    ];
+    this.log('Getting cache:');
+    var outp = 'CACHE MANIFEST\n';
+    outp += '# rev '+this.cacheVersion+'\n';
+    outp += 'CACHE:\n';
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        outp += f+'\n';
+    };
+    if (noCacheFiles.length>0) {
+        outp += 'NETWORK:\n';
+        for (var i = 0; i < noCacheFiles.length; i++) {
+            var f = noCacheFiles[i];
+            outp += f+'\n';
+        };
+    };
+    res.set({
+        'Content-Type': 'text/cache-manifest',
+        'ETag': this.cacheVersion
+    });
+    res.send(outp);
 };
 
 App.prototype.htmlGenerateApplication = function(req, res) {
