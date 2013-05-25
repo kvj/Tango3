@@ -139,10 +139,15 @@ var App = function () {
 	}.bind(this));
 	this.appCache = new AppCacheManager(function (err, newVersion) {
 		$$.log('App cache:', err, newVersion);
+		if (err) {
+			return this.showError(err);
+		};
 		if (newVersion) {
 			// Show message about it
 			this.showInfo('Reload page for new version', true);
-		};
+		} else {
+			this.showInfo('Latest version detected');
+		}
 	}.bind(this));
 };
 

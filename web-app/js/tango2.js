@@ -932,6 +932,7 @@ var AppCacheManager = function (handler) {
     }.bind(this));
     window.applicationCache.addEventListener('cached', function (evt) {
         $$.log('Application cached first time');
+        handler(null, false);
     }.bind(this));
     window.applicationCache.addEventListener('updateready', function (evt) {
         $$.log('Update is ready');
@@ -940,7 +941,7 @@ var AppCacheManager = function (handler) {
     }.bind(this));
     window.applicationCache.addEventListener('error', function (evt) {
         $$.log('Failed to download update', evt);
-        handler(evt);
+        handler('Error caching application');
     }.bind(this));
 };
 
