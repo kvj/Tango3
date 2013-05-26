@@ -741,6 +741,10 @@ var SitesManager = function (handler) {
 
 SitesManager.prototype.defaultConnection = function() {
     var reg = /(.*\/)([a-z0-9]+)\.wiki\.html($|#)/i;
+    this.dev = false;
+    if (window.location.toString().indexOf('?dev=2') != -1) {
+        this.dev = true;
+    };
     var m = window.location.toString().match(reg);
     if(!m || m[2] == 'user') {
         var path = window.localStorage['default_conn'];

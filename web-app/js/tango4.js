@@ -1602,7 +1602,7 @@ App.prototype.scrollToEl = function (el, parent) {
 };
 
 App.prototype.isAppDev = function(item) {
-	return false;
+	return this.manager.dev;
 };
 
 App.prototype.loadApplications = function() {
