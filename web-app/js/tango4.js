@@ -13,6 +13,102 @@ if (typeof String.prototype.endsWith != 'function') {
         return this.slice(-str.length) == str;
     };
 };
+var dateFormat = function () {
+    var token = /d{1,4}|m{1,4}|w{1,2}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
+        timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
+        timezoneClip = /[^-+\dA-Z]/g,
+        pad = function (val, len) {
+            val = String(val);
+            len = len || 2;
+            while (val.length < len) val = "0" + val;
+            return val;
+        };
+
+    // Regexes and supporting functions are cached through closure
+    return function (date, mask, utc) {
+        var dF = dateFormat;
+
+        // You can't provide utc if you skip other args (use the "UTC:" mask prefix)
+        if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
+            mask = date;
+            date = undefined;
+        }
+
+        // Passing date through Date applies Date.parse, if necessary
+        date = date ? new Date(date) : new Date;
+        if (isNaN(date)) throw SyntaxError("invalid date");
+
+        // Allow setting the utc argument via the mask
+        if (mask.slice(0, 4) == "UTC:") {
+            mask = mask.slice(4);
+            utc = true;
+        }
+
+        var _ = utc ? "getUTC" : "get",
+            d = date[_ + "Date"](),
+            D = date[_ + "Day"](),
+            // w = date[_ + "Week"](),
+            m = date[_ + "Month"](),
+            y = date[_ + "FullYear"](),
+            H = date[_ + "Hours"](),
+            M = date[_ + "Minutes"](),
+            s = date[_ + "Seconds"](),
+            L = date[_ + "Milliseconds"](),
+            o = utc ? 0 : date.getTimezoneOffset(),
+            flags = {
+                d:    d,
+                dd:   pad(d),
+                ddd:  dF.i18n.dayNames[D],
+                dddd: dF.i18n.dayNames[D + 7],
+                // w:    w,
+                // ww:   pad(w),
+                m:    m + 1,
+                mm:   pad(m + 1),
+                mmm:  dF.i18n.monthNames[m],
+                mmmm: dF.i18n.monthNames[m + 12],
+                yy:   String(y).slice(2),
+                yyyy: y,
+                h:    H % 12 || 12,
+                hh:   pad(H % 12 || 12),
+                H:    H,
+                HH:   pad(H),
+                M:    M,
+                MM:   pad(M),
+                s:    s,
+                ss:   pad(s),
+                l:    pad(L, 3),
+                L:    pad(L > 99 ? Math.round(L / 10) : L),
+                t:    H < 12 ? "a"  : "p",
+                tt:   H < 12 ? "am" : "pm",
+                T:    H < 12 ? "A"  : "P",
+                TT:   H < 12 ? "AM" : "PM",
+                Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
+                o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
+                S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
+            };
+
+        return mask.replace(token, function ($0) {
+            return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
+        });
+    };
+}();
+
+// Internationalization strings
+dateFormat.i18n = {
+    dayNames: [
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+    ],
+    monthNames: [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+    ]
+};
+
+// For convenience...
+Date.prototype.format = function (mask, utc) {
+    return dateFormat(this, mask, utc);
+};
 
 var EventEmitter = function(emitter) {//Creates new event emitter
     this.events = {};
@@ -133,7 +229,7 @@ var App = function () {
     }.bind(this));
 	setTimeout(function () {
 		this.resize();
-	}.bind(this), 10);
+	}.bind(this), 50);
 	this.initConnection(function () {
 		this.initUI();
 	}.bind(this));
@@ -279,6 +375,11 @@ App.prototype.refreshSyncControls = function() {
 		var wrapper = this.el('div', div, {
 			'class': 'sync_block'
 		});
+		var networkIndicator = this.renderIndicator(wrapper);
+		networkIndicator(db.online? 'on': 'off');
+		var pingIndicator = this.renderIndicator(wrapper);
+		var dataIndicator = this.renderIndicator(wrapper);
+		dataIndicator(db.changed? 'off': 'on');
 		db.onPingState = function (err, data) {
 			$$.log('Ping state:', err, data);
 			if (err) {
@@ -303,11 +404,6 @@ App.prototype.refreshSyncControls = function() {
 			slow: 1800
 		}, this.manager, function () {
 		}.bind(this));
-		var networkIndicator = this.renderIndicator(wrapper);
-		networkIndicator(db.online? 'on': 'off');
-		var pingIndicator = this.renderIndicator(wrapper);
-		var dataIndicator = this.renderIndicator(wrapper);
-		dataIndicator(db.changed? 'off': 'on');
 		var button = this.el('button', wrapper, {
 			'class': 'item_button'
 		}, db.conn.code);
@@ -348,7 +444,9 @@ App.prototype.showMessage = function(config) {
 	var remove = function () {
 		el.classList.add('fade');
 		setTimeout(function () {
-			el.parentNode.removeChild(el);
+			if (el.parentNode) {
+				el.parentNode.removeChild(el);
+			};
 		}, 1000);
 	}
 	el.addEventListener('click', function (evt) {
@@ -801,7 +899,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	// Renders link to item
 	var div = this.el('div', parent, {
 		'class': 'item_link'
-	}, '...');
+	}, 'Loading...');
 	if (id.startsWith('#')) {
 		// Tag rendering
 		div.classList.add('item_link_tag');
@@ -812,6 +910,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	var enableClick = function (item) {
 		div.classList.add('item_link_ok');
 		this.text(div, item.title || '<Untitled>', true);
+		div.title = item.title;
 		div.addEventListener('click', function (evt) {
 			this.selectItem(item);
 			evt.stopPropagation();
@@ -923,9 +1022,18 @@ App.prototype.renderGrid = function(config, div, handler) {
 		var wrapper = this.el('div', td, {
 			'class': 'item_td_wrap'
 		});
-		this.renderText(col.text || '', wrapper, function (type, text) {
-			handler(type, col, text);
-		});
+		if (col.button) {
+			var button = this.el('button', wrapper, {
+				'class': 'item_button item_td_button'
+			}, col.text);
+			button.addEventListener('click', function (evt) {
+				handler({type: 'button'}, col);
+			}.bind(this));
+		} else {
+			this.renderText(col.text || '', wrapper, function (type, text) {
+				handler(type, col, text);
+			});
+		}
 		var renderEditor = function (type) {
 			removeSelection();
 			var tr = td.parentNode;
@@ -938,14 +1046,16 @@ App.prototype.renderGrid = function(config, div, handler) {
 				// Last tr
 				tr.parentNode.appendChild(etr);
 			}
+			$$.log('renderEditor', maxCells);
 			var etd = this.el('td', etr, {
-				colspan: maxCells,
+				'colSpan': ''+maxCells,
 				'class': 'item_td_editor'
 			});
+			var val = (col.value || '' == col.value) ? col.value: col.text;
 			var etext = this.el('input', etd, {
 				'type': 'text',
 				'class': 'item_edit_text item_td_text_edit',
-				'value': type == 'edit'? col.text: '' 
+				'value': type == 'edit'? val: '' 
 			});
 			etext.addEventListener('keydown', function (evt) {
 				if (evt.keyCode == 13) {
@@ -1028,6 +1138,8 @@ App.prototype.renderGrid = function(config, div, handler) {
 				handler({type: 'remove'}, col);
 				evt.stopPropagation();
 			}.bind(this));
+		};
+		if (col.remove || col.move) {
 			this.enableDrag(td, {
 				'custom/line': {id: config.id, line: col}, 
 				'text/plain': col.text || ''
@@ -1052,8 +1164,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 			var td = this.el('td', tr, {
 				'class': cl
 			});
+			if (col.width) {
+				td.style.width = col.width;
+			};
 			if (col.span>1) {
-				td.colspan = col.span;
+				td.colSpan = col.span;
 				cells += col.span;
 			} else {
 				cells++;
@@ -1332,7 +1447,11 @@ App.prototype.renderItem = function(item, parent, config) {
 	}.bind(this);
 	var render = function () {
 		editHandlers = [];
-		var blocksToText = function (blocks) {
+		removeWidthClasses();
+		if (item.width) {
+			div.classList.add('card_width_'+item.width);
+		};
+		var blocksToGrid = function (blocks) {
 			var grid = {
 				id: item.id,
 				rows: []
@@ -1368,24 +1487,45 @@ App.prototype.renderItem = function(item, parent, config) {
 		};
 		this.parseLines(item.body, function (blocks) {
 			// By default, render grid with one row per line
-			var grid = blocksToText(blocks);
-			var editHandler = this.gridHandler(blocks, grid, bodyContentsDiv, function () {
-				// Rendered
-				this.saveBlocks(blocks, function (text) {
-					if (isInEdit()) {
-						return;
-					};
-					item.updated = new Date().getTime();
-					item.body = text;
-					this.updateItem(item, function () {
-						render();
+			this.onEveryApplication(item, function (configs) {
+				var _gridHandler = function () {
+					// Rendered
+					this.saveBlocks(blocks, function (text) {
+						if (isInEdit()) {
+							return;
+						};
+						item.updated = new Date().getTime();
+						item.body = text;
+						this.updateItem(item, function () {
+							render();
+						}.bind(this));
 					}.bind(this));
-				}.bind(this));
+				}.bind(this);
+				for (var i = 0; i < configs.length; i++) {
+					var conf = configs[i];
+					var cb = this.execApp('onRender', conf, item, bodyContentsDiv, blocks, _gridHandler);
+					if (cb) {
+						editHandlers.push(cb);
+					};
+				};
+				if (editHandlers.length == 0) {
+					var grid = blocksToGrid(blocks);
+					var editHandler = this.gridHandler(blocks, grid, bodyContentsDiv, _gridHandler);
+					editHandlers.push(editHandler);
+				};
 			}.bind(this));
-			editHandlers.push(editHandler);
 		}.bind(this));
 		renderStar();
 	}.bind(this);
+	var removeWidthClasses = function () {
+		for (var i = 0; i < div.classList.length; i++) {
+			var cl = div.classList[i];
+			if (cl.startsWith('card_width_')) {
+				div.classList.remove(cl);
+				i--;
+			};
+		};
+	}
 	render();
 	var edit = function () {
 		inEdit = true;
@@ -1411,6 +1551,25 @@ App.prototype.renderItem = function(item, parent, config) {
 			'class': 'item_edit_text',
 			'value': item.tags? item.tags.join(' '): ''
 		});
+		var widths = [1, 2, 3];
+		var w = item.width || 1;
+		var widthButton = this.el('button', ebuttons, {
+			'class': 'item_button'
+		}, ''+w+'x');
+		widthButton.addEventListener('click', function (evt) {
+			var index = widths.indexOf(w);
+			if (index == -1) {
+				index = 0;
+			} else {
+				index = (index+1) % widths.length;
+			}
+			w = widths[index];
+			this.text(widthButton, ''+w+'x');
+			removeWidthClasses();
+			div.classList.add('card_width_'+w);
+			evt.preventDefault();
+			return false;
+		}.bind(this));
 		var save = this.el('button', ebuttons, {
 			'class': 'item_button'
 		}, 'Save');
@@ -1471,6 +1630,11 @@ App.prototype.renderItem = function(item, parent, config) {
 			item.title = etitle.value.trim();
 			item.body = ebody.value;
 			var tags = etags.value.trim();
+			if (w == 1) {
+				delete item.width;
+			} else {
+				item.width = w;
+			}
 			if (tags) {
 				item.tags = tags.split(' ');
 			} else {
@@ -1605,10 +1769,48 @@ App.prototype.isAppDev = function(item) {
 	return this.manager.dev;
 };
 
+App.prototype.addDevAppButton = function(item, blocks) {
+	var button = this.el('button', this.findEl('#top_controls'), {
+		'class': 'item_button'
+	}, 'Dev:'+item.title);
+	button.addEventListener('click', function (evt) {
+		iterateOver(blocks, function (block, cb) {
+			if (block.type == 'block' && (block.params[0] == 'js' || block.params[0] == 'css') && block.params[1]) {
+			    var req = new XMLHttpRequest();
+			    req.onreadystatechange = function(e) {
+			        if (req.readyState == 4) {
+			            if (200 != req.status) {
+			                cb('XHR error');
+			            } else {
+			            	block.lines = req.responseText.split('\n');
+			            	cb();
+			            	$$.log('Resource loaded:', block.params[1]);
+			            }
+			        };
+			    };
+			    req.open('GET', 'js/apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+			    req.send();
+			} else {
+				cb();
+			}
+		}.bind(this), function (err) {
+			if (err) {
+				return this.showError('Application not updated: '+err);
+			};
+			this.saveBlocks(blocks, function (text) {
+				item.updated = new Date().getTime();
+				item.body = text;
+				this.updateItem(item, function () {
+					this.showInfo('Application updated: '+item.title);
+				}.bind(this));
+			}.bind(this));
+		}.bind(this));
+	}.bind(this));
+};
+
 App.prototype.loadApplications = function() {
     var head = document.getElementsByTagName('head')[0];
-	this.apps = {};
-	this.appDev = true;
+    this.initAppAPI();
 	var getBlockText = function (block) {
 		var result = '\n';
 		for (var i = 0; i < block.lines.length; i++) {
@@ -1621,6 +1823,9 @@ App.prototype.loadApplications = function() {
 		// Loading application
 		this.parseLines(item.body, function (blocks) {
 			$$.log('Load app:', item, blocks);
+			if (this.isAppDev(item)) {
+				this.addDevAppButton(item, blocks);
+			};
 			for (var i = 0; i < blocks.length; i++) {
 				var block = blocks[i];
 				if (block.type == 'block' && block.params[0] == 'js') {
@@ -1628,7 +1833,8 @@ App.prototype.loadApplications = function() {
 					el.setAttribute('type', 'text/javascript');
 					if (this.isAppDev(item) && block.params[1]) {
 						// Use src
-						el.setAttribute('src', 'apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+						el.setAttribute('src', 'js/apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+						this.devApps[item.title.toLowerCase()] = item.id;
 					} else { // Default
 						el.appendChild(document.createTextNode('(function($$, appID) {'+getBlockText(block)+'}).call(this, $$, "'+item.id+'");'));
 					}
@@ -1640,7 +1846,7 @@ App.prototype.loadApplications = function() {
 						// Use src
 						el = document.createElement('link');
 						el.setAttribute('rel', 'stylesheet');
-						el.setAttribute('href', 'apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+						el.setAttribute('href', 'js/apps/'+item.title.toLowerCase()+'/'+block.params[1]);
 					} else { // Default
 						el = document.createElement('style');
 						el.setAttribute('type', 'text/css');
@@ -1660,4 +1866,160 @@ App.prototype.loadApplications = function() {
 			loadApp(list[i]);
 		};
 	}.bind(this));
+};
+
+var AppTmpl = function () {};
+
+AppTmpl.prototype.onRender = function(config, item, div, blocks) {
+	return null;
+};
+
+AppTmpl.prototype.getBlock = function(blocks, name) {
+	for (var i = 0; i < blocks.length; i++) {
+		var b = blocks[i];
+		if (b.type == 'block' && b.params.length>0 && b.params[0] == name) {
+			return b;
+		};
+	};
+	return null;
+};
+
+AppTmpl.prototype.blockToConfig = function(block) {
+	if (!block) {
+		return {};
+	};
+	var result = {};
+	for (var i = 0; i < block.lines.length; i++) {
+		var line = block.lines[i];
+		var idx = line.indexOf(':');
+		if (-1 != idx) {
+			var key = line.substr(0, idx).trim();
+			var value = line.substr(idx+1).trim();
+			result[key] = value;
+		};
+	};
+	return result;
+};
+
+App.prototype.execApp = function(name, config) {
+	var app = this.apps[config.app];
+	if (!app) {
+		$$.log('App not found:', config);
+		return null;
+	};
+	var args = [config.config];
+	for (var i = 2; i < arguments.length; i++) {
+		args.push(arguments[i]);
+	};
+	return app[name].apply(app, args);
+};
+
+App.prototype.onEveryApplication = function(item, handler) {
+	// Tries to load configs by tags and executes handler for every application
+	var tags = item.tags || [];
+	var configs = [];
+	iterateOver(tags, function (tag, cb) {
+		this.list({id: tag}, function (err, data) {
+			if (err) {
+				return cb(err);
+			};
+			if (data.length == 0) {
+				return cb();
+			};
+			var	appForConfig = function (confItem) {
+				if (confItem.tags && confItem.tags.indexOf('#app') != -1) {
+					// Already application
+					configs.push({
+						app: confItem.id
+					});
+					cb();
+					return;
+				};
+				this.parseLines(confItem.body, function (blocks) {
+					configs.push({
+						app: data[0].tags,
+						config: blocks
+					});
+					cb();
+				}.bind(this));
+			}.bind(this);
+			if (data[0].tags && data[0].tags.length>0) {
+				// Have app
+				appForConfig(data[0]);
+			};
+		}.bind(this));
+	}.bind(this), function (err) {
+		if (err) {
+			return this.showError(err);
+		};
+		handler(configs);
+	}.bind(this));
+};
+
+App.prototype.initAppAPI = function() {
+	// Binds API to $$ object
+	this.apps = {};
+	this.devApps = {};
+	$$.appTmpl = AppTmpl;
+	$$.registerApplication = function (appID, instance) {
+		this.apps[appID] = instance;
+		$$.log('Application registered:', appID);
+	}.bind(this);
+	$$.showError = this.showError.bind(this);
+	$$.registerApplicationDev = function (name, instance) {
+		var appID = this.devApps[name];
+		if (appID) {
+			$$.registerApplication(appID, instance);
+		} else {
+			$$.log('Dev. application not found:', name);
+		}
+	}.bind(this);
+	$$.renderGrid = function (config, div, handler) {
+		return this.renderGrid(config, div, handler);
+	}.bind(this);
+	$$.notifyUpdated = function (item, event) {
+		if (!event) {
+			event = {};
+		};
+		event.item = item;
+		this.events.emit('update', event);
+	}.bind(this);
+	var getConnection = function (code) {
+		for (var i = 0; i < this.dbs.length; i++) {
+			var db = this.dbs[i];
+			if (db.conn.code == code) {
+				return db;
+			};
+		};
+		return null;
+	}.bind(this);
+	$$.getConnections = function () {
+		var result = [];
+		for (var i = 0; i < this.dbs.length; i++) {
+			var db = this.dbs[i];
+			result.push(db.conn);
+		};
+		return result;
+	}.bind(this);
+	$$.getTokens = function (code, handler) {
+		var db = getConnection(code);
+		if (!db) {
+			return handler('Invalid container');
+		};
+		return this.manager.getTokens(db.conn, handler);
+	}.bind(this);
+	$$.approveToken = function (code, token, handler) {
+		var db = getConnection(code);
+		if (!db) {
+			return handler('Invalid container');
+		};
+		return this.manager.approveToken(db.conn, token, handler);
+	}.bind(this);
+	$$.removeToken = function (code, token, handler) {
+		var db = getConnection(code);
+		if (!db) {
+			return handler('Invalid container');
+		};
+		return this.manager.removeToken(db.conn, token, handler);
+	}.bind(this);
 };

@@ -145,6 +145,14 @@ body {
 	box-shadow: 1px 1px 1px #888888;
 }
 
+.card_width_2 {
+	width: 22em;
+}
+
+.card_width_3 {
+	width: 30.4em;
+}
+
 .layout_narrow .card {
 	width: 100%;
 }
@@ -160,11 +168,6 @@ body {
 	font-size: 1em;
 }
 
-.card_bottom {
-	background-color: #eeeeee;
-	padding: 0.2em;
-}
-
 .card_body {
 	min-height: 18em;
 }
@@ -175,7 +178,9 @@ body {
 }
 
 .card_bottom {
-	min-height: 1.3em;
+	min-height: 1.4em;
+	background-color: #eeeeee;
+	padding: 0.1em;
 }
 
 .card_tags {
@@ -260,6 +265,7 @@ body {
 
 .item_tr {
 	height: 1.2em;
+	vertical-align: top;
 }
 
 .item_td_edit {
@@ -276,6 +282,10 @@ body {
 }
 
 .item_td_text_edit {
+	font-size: 1em;
+}
+
+.item_td_button {
 	font-size: 1em;
 }
 
@@ -368,4 +378,12 @@ body {
 
 .indicator_err {
 	background-color: #aa2222;
+}
+
+.align_c {
+	text-align: center;
+}
+
+.align_r {
+	text-align: right;
 }

@@ -54,6 +54,9 @@ App.prototype.initRest = function() {
     this.rest('/in', this.restIncomingData.bind(this), {token: true});
     this.rest('/out', this.restOutgoingData.bind(this), {token: true});
     this.rest('/ping', this.restPing.bind(this), {token: true});
+    this.rest('/site/tokens/get', this.restGetTokens.bind(this), {token: true});
+    this.rest('/site/tokens/approve', this.restApproveToken.bind(this), {token: true});
+    this.rest('/site/tokens/remove', this.restRemoveToken.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/app.cache.manifest', this.htmlGetCache.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
@@ -337,6 +340,63 @@ App.prototype.restPing = function(ctx, handler, info) {
                     return handler(null, {data: false});
                 };
             }.bind(this));
+        }.bind(this));
+    }.bind(this));
+};
+
+App.prototype.restGetTokens = function(ctx, handler, info) {
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        client.query('select token, created, status, owner, accessed, client from tokens where site_id=$1 order by created', [info.site_id], function (err, result) {
+            done();
+            if (err) {
+                return handler('DB error');
+            };
+            var json = {data: []};
+            for (var i = 0; i < result.rows.length; i++) {
+                var row = result.rows[i];
+                json.data.push({
+                    token: row.token,
+                    created: row.created,
+                    status: row.status,
+                    owner: row.owner,
+                    accessed: row.accessed,
+                    client: row.client
+                });
+            };
+            return handler(null, json);
+        }.bind(this));
+    }.bind(this));
+};
+
+App.prototype.restApproveToken = function(ctx, handler, info) {
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        client.query('update tokens set status=1 where site_id=$1 and token=$2', [info.site_id, ctx.code], function (err, result) {
+            done();
+            if (err) {
+                return handler('DB error');
+            };
+            return handler(null, {});
+        }.bind(this));
+    }.bind(this));
+};
+
+App.prototype.restRemoveToken = function(ctx, handler, info) {
+    this.db(function (err, client, done) {
+        if (err) {
+            return handler('DB error');
+        };
+        client.query('delete from tokens where site_id=$1 and token=$2', [info.site_id, ctx.code], function (err, result) {
+            done();
+            if (err) {
+                return handler('DB error');
+            };
+            return handler(null, {});
         }.bind(this));
     }.bind(this));
 };
