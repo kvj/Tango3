@@ -4,6 +4,7 @@ var App = function () {
 App.prototype = new $$.appTmpl;
 
 App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
+	// $$.log('Render calendar', item.title);
 	var grid = {
 		id: item.id,
 		rows: []

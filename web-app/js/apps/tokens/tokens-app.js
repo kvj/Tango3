@@ -18,7 +18,7 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 			if (err) {
 				return $$.showError(err);
 			};
-			$$.log('Tokens:', list);
+			// $$.log('Tokens:', list);
 			grid.rows.push({
 				cols: [{
 					text: '! Unapproved tokens:',
@@ -26,24 +26,25 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 				}]
 			});
 			for (var i = 0; i < list.data.length; i++) {
-				var item = list.data[i];
-				if (item.status == 0) {
+				var itm = list.data[i];
+				if (itm.status == 0) {
 					// Approved
 					grid.rows.push({
 						cols: [{
-							text: item.token
+							width: '100%',
+							text: $$.addSoftSpace(itm.token),
 						}, {
-							text: new Date(item.created).format('m/d H:MM')
+							align: 'r',
+							text: new Date(itm.accessed).format('m/d H:MM')
 						}, {
 							text: 'Approve',
-							token: item.token,
-							approve: true,
+							token: itm.token,
+							approveToken: true,
 							button: true
 						}, {
 							text: 'Remove',
-							token: item.token,
-							approve: false,
-							align: 'r',
+							token: itm.token,
+							removeToken: true,
 							button: true
 						}]
 					})
@@ -56,20 +57,25 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 				}]
 			});
 			for (var i = 0; i < list.data.length; i++) {
-				var item = list.data[i];
-				if (item.status != 0) {
+				var itm = list.data[i];
+				if (itm.status != 0) {
 					// Approved
 					grid.rows.push({
 						cols: [{
-							text: item.token
+							width: '100%',
+							text: $$.addSoftSpace(itm.token),
 						}, {
-							text: new Date(item.created).format('m/d H:MM')
+							align: 'r',
+							text: new Date(itm.accessed).format('m/d H:MM')
+						}, {
+							text: 'Disable',
+							token: itm.token,
+							disableToken: true,
+							button: true
 						}, {
 							text: 'Remove',
-							align: 'r',
-							token: item.token,
-							approve: false,
-							span: 2,
+							token: itm.token,
+							removeToken: true,
 							button: true
 						}]
 					})
@@ -77,15 +83,17 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 			};
 			$$.renderGrid(grid, div, function (data, col, text) {
 				var _handler = function (err) {
-					$$.log('Updated', err);
+					// $$.log('Updated', err, item);
 					if (err) {
 						return $$.showError(err);
 					};
 					$$.notifyUpdated(item);
 				}.bind(this);
 				if (data.type == 'button') {
-					if (col.approve) {
-						$$.approveToken(db.code, col.token, _handler);
+					if (col.approveToken) {
+						$$.tokenStatus(db.code, col.token, 1, _handler);
+					} else if (col.disableToken) {
+						$$.tokenStatus(db.code, col.token, 0, _handler);
 					} else {
 						if (window.confirm('Are you sure want to remove token?')) {
 							$$.removeToken(db.code, col.token, _handler);

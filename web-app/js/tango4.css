@@ -145,6 +145,10 @@ body {
 	box-shadow: 1px 1px 1px #888888;
 }
 
+.card_focus {
+	box-shadow: 0px 0px 3px 3px #888888;	
+}
+
 .card_width_2 {
 	width: 22em;
 }
@@ -155,6 +159,10 @@ body {
 
 .layout_narrow .card {
 	width: 100%;
+}
+
+.card_full_width {
+	width: 100% !important;
 }
 
 .card_title {
@@ -212,7 +220,6 @@ body {
 	margin: 0;
 	padding: 0.2em;
 	width: 100%;
-	min-height: 15em;	
 	font-family: sans-serif;
 	font-size: 0.8em;
 	margin-top: 0.5em;
@@ -315,7 +322,7 @@ body {
 	margin: 0.1em;
 	border: 1px solid #888888;
 	border-radius: 0.3em;
-	background-color: #ddddff;
+	background-color: #ddffdd;
 	cursor: progress;
 	text-overflow: ellipsis;
 	overflow: hidden;
@@ -327,7 +334,6 @@ body {
 
 .item_link_ok {
 	cursor: pointer;
-	background-color: #ddffdd;
 }
 
 .item_link_err {

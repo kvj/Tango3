@@ -807,8 +807,8 @@ SitesManager.prototype.removeToken = function(conn, code, handler) {
     this.rest(conn, 'rest/site/tokens/remove', {code: code, token: conn.token}, handler);
 };
 
-SitesManager.prototype.approveToken = function(conn, code, handler) {
-    this.rest(conn, 'rest/site/tokens/approve', {code: code, token: conn.token}, handler);
+SitesManager.prototype.tokenStatus = function(conn, code, status, handler) {
+    this.rest(conn, 'rest/site/tokens/status', {code: code, status: status, token: conn.token}, handler);
 };
 
 SitesManager.prototype.newSite = function(conn, code, handler) {

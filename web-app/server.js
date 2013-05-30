@@ -55,7 +55,7 @@ App.prototype.initRest = function() {
     this.rest('/out', this.restOutgoingData.bind(this), {token: true});
     this.rest('/ping', this.restPing.bind(this), {token: true});
     this.rest('/site/tokens/get', this.restGetTokens.bind(this), {token: true});
-    this.rest('/site/tokens/approve', this.restApproveToken.bind(this), {token: true});
+    this.rest('/site/tokens/status', this.restTokenStatus.bind(this), {token: true});
     this.rest('/site/tokens/remove', this.restRemoveToken.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
     this.app.get('/app.cache.manifest', this.htmlGetCache.bind(this));
@@ -146,6 +146,11 @@ App.prototype.rest = function (path, handler, config) {
                         return handler('Token not found');
                     };
                     var row = result.rows[0];
+                    if (row.status != 1) {
+                        // Not approved
+                        done();
+                        return handler('Account disabled');
+                    };
                     var info = {
                         token: row.token,
                         token_id: row.id,
@@ -246,6 +251,18 @@ App.prototype.restOutgoingData = function(ctx, handler, info) {
             clean: false,
             data: []
         };
+        var updateToken = function () {
+            if (!info.token) {
+                // No token - public access
+                return done();
+            };
+            client.query('update tokens set accessed=$1 where id=$2', [new Date().getTime(), info.token_id], function (err) {
+                if (err) {
+                    this.log('Error updating token access time:', err);
+                };
+                done();
+            }.bind(this));
+        }.bind(this);
         client.query('select id from history where history_id=$1', [ctx.from || null], function (err, result) {
             if (err) {
                 done();
@@ -298,9 +315,13 @@ App.prototype.restOutgoingData = function(ctx, handler, info) {
                         }.bind(this));
                     }.bind(this)
                 }, function (err, result) {
-                    done();
+                    if (err) {
+                        done();
+                        return handler(err);
+                    };
                     res.data = result;
                     handler(null, res);
+                    updateToken();
                 }.bind(this));
             }.bind(this));
         }.bind(this));
@@ -371,12 +392,16 @@ App.prototype.restGetTokens = function(ctx, handler, info) {
     }.bind(this));
 };
 
-App.prototype.restApproveToken = function(ctx, handler, info) {
+// Changes token status
+App.prototype.restTokenStatus = function(ctx, handler, info) {
+    if (info.token == ctx.code && !ctx.status) {
+        return handler('Denied to disable own token');
+    };
     this.db(function (err, client, done) {
         if (err) {
             return handler('DB error');
         };
-        client.query('update tokens set status=1 where site_id=$1 and token=$2', [info.site_id, ctx.code], function (err, result) {
+        client.query('update tokens set status=$1 where site_id=$2 and token=$3', [ctx.status || 0, info.site_id, ctx.code], function (err, result) {
             done();
             if (err) {
                 return handler('DB error');

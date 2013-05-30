@@ -222,6 +222,8 @@ var App = function () {
 				children: [{id: '#left_pane', stretch: true}, {id: '#right_pane', stretch: true}]
 			}]
 	};
+	this.titleCache = {};
+	this.editorHeight = 15;
 	this.events = new EventEmitter(this);
 	this.layoutType = '';
     window.addEventListener('resize', function(e) {//Auto resize
@@ -234,7 +236,7 @@ var App = function () {
 		this.initUI();
 	}.bind(this));
 	this.appCache = new AppCacheManager(function (err, newVersion) {
-		$$.log('App cache:', err, newVersion);
+		// $$.log('App cache:', err, newVersion);
 		if (err) {
 			return this.showError(err);
 		};
@@ -480,11 +482,114 @@ App.prototype.showError = function(message, persist) {
 	});
 };
 
+var ScreenPanel = function () {
+	this.items = [];
+	this.focused = null;
+};
+
+ScreenPanel.prototype.onKey = function(evt) {
+	return false;
+};
+
+ScreenPanel.prototype.getFocused = function() {
+	if (!this.focused) {
+		return null;
+	};
+	for (var i = 0; i < this.items.length; i++) {
+		var item = this.items[i];
+		if (item.item.id == this.focused.id) {
+			return item;
+		};
+	};
+	return null;
+};
+
+ScreenPanel.prototype.execFocused = function() {
+	if (!this.focused) {
+		return;
+	};
+	for (var i = 0; i < this.items.length; i++) {
+		var item = this.items[i];
+		if (item.item.id == this.focused.id) {
+			return item.handler.apply(this, arguments);
+		};
+	};
+	return;
+};
+
+ScreenPanel.prototype.focus = function(focus, id, direction) {
+	// Called when pane is focused
+	// $$.log('focus panel:', focus, id, direction, this.focused, this.items.length);
+	var searchById = function (id) {
+		for (var i = 0; i < this.items.length; i++) {
+			var item = this.items[i];
+			if (item.item.id == id) {
+				return i;
+			};
+		};
+		return -1;
+	}.bind(this);
+	if (id) {
+		var index = searchById(id);
+		if (-1 == index) {
+
+			return false;
+		};
+		item = this.items[index];
+		this.focused = {id: item.item.id};
+		item.handler('focus', true, this.focused);
+		return true;
+	};
+	if (this.focused) {
+		// Was focused - and not item - try to restore
+		var i = searchById(this.focused.id);
+		if (-1 == i) {
+			this.focused = null;
+			return false;
+		};
+		item = this.items[i];
+		if (!direction || this.items.length == 1) {
+			// Not move cursor or one item
+			item.handler('focus', focus, this.focused);
+		} else {
+			item.handler('focus', false, this.focused); // Move cursor
+			var index = i + direction;
+			if (index<0) {
+				index = this.items.length-1; // Last
+			};
+			if (index>=this.items.length) {
+				index = 0;
+			};
+			item = this.items[index];
+			this.focused = {id: item.item.id};
+			item.handler('focus', true, this.focused);
+		}
+		return true;
+	};
+	if (this.items.length == 0 || !focus) {
+		// No items
+		return false;
+	};
+	var item = this.items[0];
+	this.focused = {id: item.item.id};
+	item.handler('focus', focus, this.focused);
+	return true;
+};
+
+ScreenPanel.prototype.isInEdit = function() {
+	for (var i = 0; i < this.items.length; i++) {
+		var item = this.items[i];
+		if (item.handler('locked')) {
+			return true;
+		};
+	};
+	return false;
+};
+
 var FreePanel = function (app, div) {
 	this.app = app;
 	this.div = div;
-	this.items = [];
-	this.renders = [];
+	this.data = [];
 	this.div.addEventListener('click', function (evt) {
 		// Reset selection
 		app.selectItem(null);
@@ -515,6 +620,8 @@ var FreePanel = function (app, div) {
 	this.loadStarred();
 };
 
+FreePanel.prototype = new ScreenPanel();
+
 FreePanel.prototype.selectItem = function(item) {
 	this.showItems(item);
 };
@@ -525,34 +632,36 @@ FreePanel.prototype.loadStarred = function() {
 		if (err) {
 			return this.app.showError(err);
 		};
-		this.items = list;
+		this.data = list;
 		this.showItems();
+		this.focus(true, null, 0);
 	}.bind(this));
 };
 
 FreePanel.prototype.showItems = function(selected) {
-	this.app.refreshPane(this.div, this.renders, this.items, {
+	this.app.refreshPane(this.div, this.items, this.data, {
 		selected: selected? selected.id: null,
+		panel: this,
 		unpin: true
 	});
 };
 
 FreePanel.prototype.addItem = function(other) {
-	for (var i = 0; i < this.items.length; i++) {
-		var item = this.items[i];
+	for (var i = 0; i < this.data.length; i++) {
+		var item = this.data[i];
 		if (item.id == other.id) {
 			return false;
 		};
 	};
-	this.items.push(other);
+	this.data.push(other);
 	return true;
 };
 
 FreePanel.prototype.removeItem = function(other) {
-	for (var i = 0; i < this.items.length; i++) {
-		var item = this.items[i];
+	for (var i = 0; i < this.data.length; i++) {
+		var item = this.data[i];
 		if (item.id == other.id) {
-			this.items.splice(i, 1);
+			this.data.splice(i, 1);
 			return true;
 		};
 	};
@@ -562,7 +671,6 @@ FreePanel.prototype.removeItem = function(other) {
 var BrowserPanel = function (app, div) {
 	this.app = app;
 	this.div = div;
-	this.items = [];
 	this.div.addEventListener('dblclick', function (evt) {
 		// Add new item to currently selected item
 		window.getSelection().removeAllRanges();
@@ -596,6 +704,8 @@ var BrowserPanel = function (app, div) {
 	}.bind(this));
 };
 
+BrowserPanel.prototype = new ScreenPanel();
+
 BrowserPanel.prototype.selectItem = function(item) {
 	// When item is selected in left pane - load items to right pane
 	// parent: item? item.id: 'null'
@@ -627,17 +737,36 @@ BrowserPanel.prototype.selectItem = function(item) {
 		this.selected = item;
 		this.app.refreshPane(this.div, this.items, items, {
 			selected: item? item.id: null,
+			panel: this,
 			edit: true,
 			scroll: true,
 			pin: true
-		});		
+		});
+		if (item) {
+			this.app.events.emit('focus', {
+				item: item,
+				panel: this
+			});
+		};
 	}.bind(this));
+};
+
+App.prototype.isInEdit = function() {
+	for (var i = 0; i < this.panels.length; i++) {
+		var panel = this.panels[i];
+		if (panel.isInEdit()) {
+			return true;
+		};
+	};
+	return false;
 };
 
 App.prototype.initUI = function() {
 	this.selected = null;
 	this.freePanel = new FreePanel(this, this.findEl('#left_pane'));
 	this.browser = new BrowserPanel(this, this.findEl('#right_pane'));
+	this.panels = [this.freePanel, this.browser];
+	this.selectedPanel = 0;
 	this.browser.selectItem(null);
 	this.refreshSyncControls();
 	this.showInfo('Application loaded');
@@ -647,6 +776,99 @@ App.prototype.initUI = function() {
 	}, 'Top');
 	button.addEventListener('click', function (evt) {
 		this.browser.selectItem(null);
+	}.bind(this));
+	this.keyHandler();
+};
+
+App.prototype.panelIndex = function(panel) {
+	return this.panels.indexOf(panel);
+};
+
+App.prototype.isPanelSelected = function(panel) {
+	return this.panelIndex() == this.selectedPanel;
+};
+
+App.prototype.keyHandler = function() {
+	this.events.on('focus', function (evt) {
+		var panelIndex = this.panelIndex(evt.panel);
+		if (-1 == panelIndex) {
+			// Invalid event
+			return;
+		};
+		// $$.log('Focus event', this.selectedPanel, panelIndex, evt.item.id);
+		if (panelIndex != this.selectedPanel) {
+			// Panel changed
+			this.panels[this.selectedPanel].focus(false, null, 0);
+			this.selectedPanel = panelIndex;
+			this.panels[this.selectedPanel].focus(true, evt.item.id, 0);
+		} else {
+			// Same panel
+			this.panels[this.selectedPanel].focus(true, evt.item.id, 0);
+		}
+	}.bind(this));
+	document.body.addEventListener('keydown', function (evt) {
+		if (!this.isInEdit()) {
+			// Most key buttons work in browse mode
+			if (evt.keyCode == 38) {
+				this.panels[this.selectedPanel].focus(true, null, -1);
+				return false;
+			};
+			if (evt.keyCode == 40) {
+				this.panels[this.selectedPanel].focus(true, null, 1);
+				return false;
+			};
+			if (evt.keyCode == 37) { // Left
+				this.panels[this.selectedPanel].focus(false, null, 0);
+				this.selectedPanel--;
+				if (this.selectedPanel<0) {
+					this.selectedPanel = this.panels.length-1;
+				};
+				this.panels[this.selectedPanel].focus(true, null, 0);
+				return false;
+			};
+			if (evt.keyCode == 39) { // Left
+				this.panels[this.selectedPanel].focus(false, null, 0);
+				this.selectedPanel++;
+				if (this.selectedPanel>=this.panels.length) {
+					this.selectedPanel = 0;
+				};
+				this.panels[this.selectedPanel].focus(true, null, 0);
+				return false;
+			};
+			if (evt.keyCode == 13) {
+				// Enter - select
+				var item = this.panels[this.selectedPanel].getFocused();
+				if (item) {
+					this.selectItem(item.item);
+				};
+				return false;
+			};
+			if (evt.keyCode == 32) {
+				// Space - edit
+				this.panels[this.selectedPanel].execFocused('edit');
+				return false;
+			};
+			if (evt.keyCode == 73) {
+				// i - new child
+				this.panels[this.selectedPanel].execFocused('child');
+				return false;
+			};
+			if (evt.keyCode == 80) {
+				// p - pin/unpin
+				this.panels[this.selectedPanel].execFocused('pin');
+				return false;
+			};
+			if (evt.keyCode == 66) {
+				// b - toggle star
+				this.panels[this.selectedPanel].execFocused('star');
+				return false;
+			};
+		};
+		// $$.log('Keydown', evt.keyCode, this.isInEdit());
+		// 73 - i
+		// 80 - p
+		// 66 - b
+		// 85 - u
 	}.bind(this));
 };
 
@@ -899,7 +1121,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	// Renders link to item
 	var div = this.el('div', parent, {
 		'class': 'item_link'
-	}, 'Loading...');
+	}, this.titleCache[id] || 'Loading...');
 	if (id.startsWith('#')) {
 		// Tag rendering
 		div.classList.add('item_link_tag');
@@ -909,7 +1131,8 @@ App.prototype.renderLink = function(parent, id, config) {
 	};
 	var enableClick = function (item) {
 		div.classList.add('item_link_ok');
-		this.text(div, item.title || '<Untitled>', true);
+		this.titleCache[id] = item.title || '<Untitled>';
+		this.text(div, this.titleCache[id], true);
 		div.title = item.title;
 		div.addEventListener('click', function (evt) {
 			this.selectItem(item);
@@ -1046,7 +1269,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 				// Last tr
 				tr.parentNode.appendChild(etr);
 			}
-			$$.log('renderEditor', maxCells);
+			// $$.log('renderEditor', maxCells);
 			var etd = this.el('td', etr, {
 				'colSpan': ''+maxCells,
 				'class': 'item_td_editor'
@@ -1328,7 +1551,7 @@ App.prototype.renderItem = function(item, parent, config) {
 	var starAnchor = this.el('a', titleDiv, {
 		'href': '#'
 	});
-	starAnchor.addEventListener('click', function (evt) {
+	var toggleStar = function () {
 		if (item.starred) {
 			delete item.starred;
 		} else {
@@ -1338,6 +1561,9 @@ App.prototype.renderItem = function(item, parent, config) {
 		this.updateItem(item, function () {
 			renderStar();
 		});
+	}.bind(this);
+	starAnchor.addEventListener('click', function (evt) {
+		toggleStar();
 		evt.stopPropagation();
 		evt.preventDefault();
 		return false;
@@ -1403,7 +1629,6 @@ App.prototype.renderItem = function(item, parent, config) {
 		};
 		if (config.scroll) {
 			// Scroll to element
-			this.scrollToEl(div);
 		};
 	};
 	var bodyContentsDiv = this.el('div', bodyDiv, {
@@ -1421,7 +1646,7 @@ App.prototype.renderItem = function(item, parent, config) {
 				item.updated = new Date().getTime();
 				item.tags = tags;
 				this.updateItem(item, function () {
-					render();
+					render('Dropped');
 				}.bind(this));
 			};
 			return false;
@@ -1445,9 +1670,10 @@ App.prototype.renderItem = function(item, parent, config) {
 		};
 		return false;
 	}.bind(this);
-	var render = function () {
-		editHandlers = [];
+	var render = function (reason) {
+		// $$.log('Render...', reason);
 		removeWidthClasses();
+		div.classList.remove('card_full_width');
 		if (item.width) {
 			div.classList.add('card_width_'+item.width);
 		};
@@ -1477,7 +1703,6 @@ App.prototype.renderItem = function(item, parent, config) {
 			return grid;
 		};
 		this.text(titleTextDiv, item.title || '<No title>', true);
-		this.text(bodyContentsDiv);
 		var tags = item.tags || [];
 		this.text(tagsDiv);
 		for (var i = 0; i < tags.length; i++) {
@@ -1497,10 +1722,13 @@ App.prototype.renderItem = function(item, parent, config) {
 						item.updated = new Date().getTime();
 						item.body = text;
 						this.updateItem(item, function () {
-							render();
+							//render('Grid updated');
 						}.bind(this));
 					}.bind(this));
 				}.bind(this);
+				// $$.log('Render', item.title, editHandlers.length, configs.length);
+				this.text(bodyContentsDiv);
+				editHandlers = [];
 				for (var i = 0; i < configs.length; i++) {
 					var conf = configs[i];
 					var cb = this.execApp('onRender', conf, item, bodyContentsDiv, blocks, _gridHandler);
@@ -1526,7 +1754,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			};
 		};
 	}
-	render();
+	render('Item render');
 	var edit = function () {
 		inEdit = true;
 		wrapper.style.display = 'none';
@@ -1534,6 +1762,9 @@ App.prototype.renderItem = function(item, parent, config) {
 			'class': 'card_edit'
 		});
 		var ebuttons = this.el('div', ewrapper, {
+			'class': 'card_edit_buttons'
+		});
+		var eSizeButtons = this.el('div', ewrapper, {
 			'class': 'card_edit_buttons'
 		});
 		var etitle = this.el('input', ewrapper, {
@@ -1585,6 +1816,47 @@ App.prototype.renderItem = function(item, parent, config) {
 		var cancel = this.el('button', ebuttons, {
 			'class': 'item_button'
 		}, 'Cancel');
+		var setEditorHeight = function () {
+			ebody.style.height = ''+this.editorHeight+'em';
+		}.bind(this);
+		var heightUp = this.el('button', eSizeButtons, {
+			'class': 'item_button'
+		}, '+ Height');
+		var heightDown = this.el('button', eSizeButtons, {
+			'class': 'item_button'
+		}, '- Height');
+		heightUp.addEventListener('click', function (evt) {
+			this.editorHeight += 5;
+			setEditorHeight();
+			evt.stopPropagation();
+		}.bind(this));
+		heightDown.addEventListener('click', function (evt) {
+			if (this.editorHeight>5) {
+				this.editorHeight -= 5;
+				setEditorHeight();
+			};
+			evt.stopPropagation();
+		}.bind(this));
+		setEditorHeight();
+		var inFullWidth = false;
+		var setFullWidth = function () {
+			if (inFullWidth) {
+				div.classList.add('card_full_width');
+				this.text(toggleFullWidth, 'Narrow');
+			} else {
+				div.classList.remove('card_full_width');
+				this.text(toggleFullWidth, 'Wide');
+			}
+		}.bind(this);
+		var toggleFullWidth = this.el('button', eSizeButtons, {
+			'class': 'item_button'
+		});
+		setFullWidth();
+		toggleFullWidth.addEventListener('click', function (evt) {
+			evt.stopPropagation();
+			inFullWidth = !inFullWidth;
+			setFullWidth();
+		})
 		var onKeyPress = function (evt) {
 			if (evt.ctrlKey && evt.keyCode == 13) {
 				// Save
@@ -1642,7 +1914,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			}
 			item.updated = new Date().getTime();
 			this.updateItem(item, function () {
-				render();
+				render('Saved');
 				onFinishEdit();
 			});
 		}.bind(this);
@@ -1673,12 +1945,21 @@ App.prototype.renderItem = function(item, parent, config) {
 		if (evt.item && evt.item.id == item.id) {
 			item = evt.item;
 			if (!isInEdit()) {
-				render();
+				render('Update event');
 			};
 		};
 	}.bind(this);
+	var onFocus = function (focus, data) {
+		// $$.log('item focus:', item, focus, data, config.panel);
+		if (focus) {
+			div.classList.add('card_focus');
+			this.scrollToEl(div);
+		} else {
+			div.classList.remove('card_focus');
+		}
+	}.bind(this);
 	this.events.on('update', onUpdate);
-	return function (type) {
+	return function (type, arg0, arg1, arg2) {
 		if ('div' == type) {
 			return div;
 		};
@@ -1688,6 +1969,24 @@ App.prototype.renderItem = function(item, parent, config) {
 		};
 		if ('locked' == type) {
 			return isInEdit();
+		};
+		if ('focus' == type) {
+			return onFocus(arg0, arg1);
+		};
+		if ('edit' == type) {
+			return edit();
+		};
+		if ('child' == type) {
+			return this.createNewItem(item);
+		};
+		if ('star' == type) {
+			return toggleStar();
+		};
+		if ('pin' == type) {
+			// Toggle pin/unpin
+			return this.events.emit(config.unpin? 'unpin': 'pin', {
+				item: item
+			});
 		};
 	}.bind(this);
 };
@@ -1699,9 +1998,20 @@ App.prototype.refreshPane = function(parent, array, data, config) {
 		return false;
 	}
 	array.splice(0, array.length);
+	var focusFound = false;
 	for (var i = 0; i < data.length; i++) {
 		var item = data[i];
-		array.push({item: item, handler: this.renderItem(item, parent, conf)});
+		var obj = {item: item, handler: this.renderItem(item, parent, conf)};
+		array.push(obj);
+		if (this.isPanelSelected(config.panel) && config.panel.focused && config.panel.focused.id == item.id) {
+			// Restore focus
+			obj.handler('focus', true, config.panel.focused);
+			focusFound = true;
+		};
+	};
+	if (!focusFound) {
+		// reset focus in panel
+		config.panel.focused = null;
 	};
 	this.el('div', parent, {
 		'class': 'clear'
@@ -1716,6 +2026,17 @@ App.prototype.pxInEm = function(el) {
 	return Number(getComputedStyle(el, "").fontSize.match(/(\d*(\.\d*)?)px/)[1]);
 };
 
+App.prototype.addSoftSpace = function(text) {
+	if (text) {
+		var data = '';
+		for (var i = 0; i < text.length; i++) {
+			data += text[i]+String.fromCharCode(0x200B);
+		};
+		return data;
+	};
+	return text;
+};
+
 App.prototype.text = function(el, text, softspace) {
 	var nl = el.childNodes;
 	while(nl.length>0) {
@@ -1724,11 +2045,7 @@ App.prototype.text = function(el, text, softspace) {
 	if (text) {
 		var data = text;
 		if (softspace) {
-			// Add soft break
-			data = '';
-			for (var i = 0; i < text.length; i++) {
-				data += text[i]+String.fromCharCode(0x200B);
-			};
+			data = this.addSoftSpace(text);
 		};
 		el.appendChild(document.createTextNode(data));
 	};
@@ -2008,12 +2325,12 @@ App.prototype.initAppAPI = function() {
 		};
 		return this.manager.getTokens(db.conn, handler);
 	}.bind(this);
-	$$.approveToken = function (code, token, handler) {
+	$$.tokenStatus = function (code, token, status, handler) {
 		var db = getConnection(code);
 		if (!db) {
 			return handler('Invalid container');
 		};
-		return this.manager.approveToken(db.conn, token, handler);
+		return this.manager.tokenStatus(db.conn, token, status, handler);
 	}.bind(this);
 	$$.removeToken = function (code, token, handler) {
 		var db = getConnection(code);
@@ -2022,4 +2339,5 @@ App.prototype.initAppAPI = function() {
 		};
 		return this.manager.removeToken(db.conn, token, handler);
 	}.bind(this);
+	$$.addSoftSpace = this.addSoftSpace.bind(this);
 };
