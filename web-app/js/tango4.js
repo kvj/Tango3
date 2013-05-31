@@ -628,7 +628,7 @@ FreePanel.prototype.selectItem = function(item) {
 
 FreePanel.prototype.loadStarred = function() {
 	// Loads all starred items to panel
-	this.app.list({starred: 1}, function (err, list) {
+	this.app.list({starred: 1, sort: 'name'}, function (err, list) {
 		if (err) {
 			return this.app.showError(err);
 		};
@@ -717,7 +717,7 @@ BrowserPanel.prototype.selectItem = function(item) {
 	if (item) {
 		allItems.push({id: item.id}); // Add itself
 	};
-	allItems.push({parent: item? item.id: 'null'});
+	allItems.push({parent: item? item.id: 'null', sort: 'name'});
 	iterateOver(allItems, function (conf, cb) {
 		this.app.list(conf, function (err, list) {
 			// Selected right panel
@@ -807,15 +807,20 @@ App.prototype.keyHandler = function() {
 		}
 	}.bind(this));
 	document.body.addEventListener('keydown', function (evt) {
+		var stop = function () {
+			evt.preventDefault();
+			evt.stopPropagation();
+			return false;
+		}.bind(this);
 		if (!this.isInEdit()) {
 			// Most key buttons work in browse mode
 			if (evt.keyCode == 38) {
 				this.panels[this.selectedPanel].focus(true, null, -1);
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 40) {
 				this.panels[this.selectedPanel].focus(true, null, 1);
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 37) { // Left
 				this.panels[this.selectedPanel].focus(false, null, 0);
@@ -824,7 +829,7 @@ App.prototype.keyHandler = function() {
 					this.selectedPanel = this.panels.length-1;
 				};
 				this.panels[this.selectedPanel].focus(true, null, 0);
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 39) { // Left
 				this.panels[this.selectedPanel].focus(false, null, 0);
@@ -833,7 +838,7 @@ App.prototype.keyHandler = function() {
 					this.selectedPanel = 0;
 				};
 				this.panels[this.selectedPanel].focus(true, null, 0);
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 13) {
 				// Enter - select
@@ -841,34 +846,30 @@ App.prototype.keyHandler = function() {
 				if (item) {
 					this.selectItem(item.item);
 				};
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 32) {
 				// Space - edit
 				this.panels[this.selectedPanel].execFocused('edit');
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 73) {
 				// i - new child
 				this.panels[this.selectedPanel].execFocused('child');
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 80) {
 				// p - pin/unpin
 				this.panels[this.selectedPanel].execFocused('pin');
-				return false;
+				return stop();
 			};
 			if (evt.keyCode == 66) {
 				// b - toggle star
 				this.panels[this.selectedPanel].execFocused('star');
-				return false;
+				return stop();
 			};
 		};
 		// $$.log('Keydown', evt.keyCode, this.isInEdit());
-		// 73 - i
-		// 80 - p
-		// 66 - b
-		// 85 - u
 	}.bind(this));
 };
 
@@ -995,6 +996,17 @@ App.prototype.list = function(config, handler) {
 			cb(null);
 		}.bind(this));
 	}.bind(this), function (err) {
+		if ('name' == config.sort) {
+			result.sort(function (a, b) {
+				if(a.title<b.title) {
+					return -1;
+				}
+				if(a.title>b.title) {
+					return 1;
+				}
+				return a.created-b.created;
+			});
+		};
 		handler(err, result);
 	}.bind(this))
 };
