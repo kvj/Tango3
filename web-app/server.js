@@ -234,8 +234,7 @@ App.prototype.htmlGetCache = function(req, res) {
         'js/tango4.js'
     ];
     var noCacheFiles = [
-        'https://www.google-analytics.com/analytics.js',
-        'https://www.google-analytics.com/collect'
+        '*'
     ];
     this.log('Getting cache:');
     var outp = 'CACHE MANIFEST\n';

@@ -238,7 +238,8 @@ var App = function () {
 	this.appCache = new AppCacheManager(function (err, newVersion) {
 		// $$.log('App cache:', err, newVersion);
 		if (err) {
-			return this.showError(err);
+			// return this.showError(err);
+			return; // Offline?
 		};
 		if (newVersion) {
 			// Show message about it
