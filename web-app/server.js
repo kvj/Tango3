@@ -270,7 +270,7 @@ App.prototype.htmlGenerateApplication = function(req, res) {
         var tmpl = data;
         res.set('Content-Type', 'text/html');
         var dev = req.url.indexOf('?dev') != -1;
-        res.send(tmpl.replace('#{code}', id).replace('#{analytics}', dev? '': this.analyticsCode));
+        res.send(tmpl.replace(/\#\{code\}/g, id).replace('#{analytics}', dev? '': this.analyticsCode));
     }.bind(this));
 };
 
