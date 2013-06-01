@@ -11,6 +11,7 @@ var PG_PASS_DEF = 'tango2';
 var PG_APPL_DEF = 'tango2';
 var SERVER_PORT_DEF = 3000;
 
+
 var express = require('express');
 var pg = require('pg');
 var common = require('./js/common');
@@ -58,7 +59,7 @@ App.prototype.initRest = function() {
     this.rest('/site/tokens/status', this.restTokenStatus.bind(this), {token: true});
     this.rest('/site/tokens/remove', this.restRemoveToken.bind(this), {token: true});
     this.app.get('/:code.wiki.html', this.htmlLoadApplication.bind(this));
-    this.app.get('/app.cache.manifest', this.htmlGetCache.bind(this));
+    this.app.get('/:code.cache.manifest', this.htmlGetCache.bind(this));
     this.app.get('/', this.htmlGenerateApplication.bind(this));
     var port = SERVER_PORT_DEF;
     if (process.argv.length>2) {
@@ -67,20 +68,29 @@ App.prototype.initRest = function() {
     this.app.listen(port);
     this.log('Server started on', port);
     this.cacheVersion = 0;
+    this.analyticsCode = '';
     this.loadAppVersion();
+    this.loadFile('analytics.txt', function (data) {
+        this.analyticsCode = data;
+    }.bind(this));
 };
 
-App.prototype.loadAppVersion = function() {
-    fs.readFile('app.version.txt', {
+App.prototype.loadFile = function(name, handler) {
+    fs.readFile(name, {
         encoding: 'utf8'
     }, function (err, data) {
         if (err) {
-            this.log('Error getting app version:', err);
+            this.log('Error loading file:', name, err);
         } else {
-            this.log('Type', typeof(data));
-            this.cacheVersion = data.toString().trim();
-            this.log('App version loaded:', this.cacheVersion);
+            handler(data.toString().trim());
         }
+    }.bind(this));
+};
+
+App.prototype.loadAppVersion = function() {
+    this.loadFile('app.version.txt', function (data) {
+        this.cacheVersion = data;
+        this.log('App version loaded:', this.cacheVersion);
     }.bind(this));
 };
 
@@ -196,12 +206,19 @@ App.prototype.log = function() {
 
 App.prototype.htmlLoadApplication = function(req, res) {
     $$.log('Load application:', req.params.code);
-    if (req.url.indexOf('?dev') != -1) {
-        // Has dev in URL - no manifest
-        res.sendfile('tango4_dev.html');
-    } else {
-        res.sendfile('tango4.html');
-    }
+    fs.readFile('tango4.tmpl.html', {
+        encoding: 'utf8'
+    }, function (err, data) {
+        if (err) {
+            this.log('Error getting html template:', err);
+            res.send(500, 'HTML template not found');
+            return;
+        };
+        var tmpl = data.toString().trim();
+        res.set('Content-Type', 'text/html');
+        var dev = req.url.indexOf('?dev') != -1;
+        res.send(tmpl.replace('#{manifest}', dev? '': ' manifest="'+req.params.code+'.cache.manifest"').replace('#{analytics}', dev? '': this.analyticsCode));
+    }.bind(this));
 };
 
 App.prototype.htmlGetCache = function(req, res) {
@@ -219,6 +236,7 @@ App.prototype.htmlGetCache = function(req, res) {
     var outp = 'CACHE MANIFEST\n';
     outp += '# rev '+this.cacheVersion+'\n';
     outp += 'CACHE:\n';
+    outp += ''+req.params.code+'.wiki.html\n';
     for (var i = 0; i < files.length; i++) {
         var f = files[i];
         outp += f+'\n';
