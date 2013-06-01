@@ -217,7 +217,7 @@ App.prototype.htmlLoadApplication = function(req, res) {
         var tmpl = data.toString().trim();
         res.set('Content-Type', 'text/html');
         var dev = req.url.indexOf('?dev') != -1;
-        res.send(tmpl.replace('#{manifest}', dev? '': ' manifest="'+req.params.code+'.cache.manifest"').replace('#{analytics}', dev? '': this.analyticsCode));
+        res.send(tmpl.replace('#{manifest}', dev? '': ' manifest="'+req.params.code+'.cache.manifest"').replace('#{analytics}', this.analyticsCode));
     }.bind(this));
 };
 
