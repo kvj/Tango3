@@ -70,8 +70,10 @@ App.prototype.initRest = function() {
     this.cacheVersion = 0;
     this.analyticsCode = '';
     this.loadAppVersion();
-    this.loadFile('analytics.txt', function (data) {
-        this.analyticsCode = data;
+    this.loadFile('analytics.txt', function (err, data) {
+        if (!err) {
+            this.analyticsCode = data;
+        };
     }.bind(this));
 };
 
@@ -81,16 +83,19 @@ App.prototype.loadFile = function(name, handler) {
     }, function (err, data) {
         if (err) {
             this.log('Error loading file:', name, err);
+            handler(err);
         } else {
-            handler(data.toString().trim());
+            handler(null, data.toString().trim());
         }
     }.bind(this));
 };
 
 App.prototype.loadAppVersion = function() {
-    this.loadFile('app.version.txt', function (data) {
-        this.cacheVersion = data;
-        this.log('App version loaded:', this.cacheVersion);
+    this.loadFile('app.version.txt', function (err, data) {
+        if (!err) {
+            this.cacheVersion = data;
+            this.log('App version loaded:', this.cacheVersion);
+        };
     }.bind(this));
 };
 
@@ -206,15 +211,13 @@ App.prototype.log = function() {
 
 App.prototype.htmlLoadApplication = function(req, res) {
     $$.log('Load application:', req.params.code);
-    fs.readFile('tango4.tmpl.html', {
-        encoding: 'utf8'
-    }, function (err, data) {
+    this.loadFile('tango4.tmpl.html', function (err, data) {
         if (err) {
             this.log('Error getting html template:', err);
             res.send(500, 'HTML template not found');
             return;
         };
-        var tmpl = data.toString().trim();
+        var tmpl = data;
         res.set('Content-Type', 'text/html');
         var dev = req.url.indexOf('?dev') != -1;
         res.send(tmpl.replace('#{manifest}', dev? '': ' manifest="'+req.params.code+'.cache.manifest"').replace('#{analytics}', dev? '': this.analyticsCode));
@@ -258,7 +261,17 @@ App.prototype.htmlGetCache = function(req, res) {
 
 App.prototype.htmlGenerateApplication = function(req, res) {
     var id = this.random(8);
-    res.send('<a href="/'+id+'.wiki.html">Create new Container ['+id+']</a>');
+    this.loadFile('index.tmpl.html', function (err, data) {
+        if (err) {
+            this.log('Error getting html template:', err);
+            res.send(500, 'HTML template not found');
+            return;
+        };
+        var tmpl = data;
+        res.set('Content-Type', 'text/html');
+        var dev = req.url.indexOf('?dev') != -1;
+        res.send(tmpl.replace('#{code}', id).replace('#{analytics}', dev? '': this.analyticsCode));
+    }.bind(this));
 };
 
 App.prototype.restOutgoingData = function(ctx, handler, info) {
