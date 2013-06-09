@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html debug="false">
+    <head>
+        <title>Edit test</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1"> 
+        <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+        <script type="text/javascript">
+			document.addEventListener('DOMContentLoaded', function () {
+				var getCursorPos = function (div) {
+					var selection = window.getSelection();
+					if (selection.rangeCount == 0) {
+						return 0;
+					};
+					var range = selection.getRangeAt(0);
+					var treeWalker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, function (node) {
+						var nodeRange = document.createRange();
+						nodeRange.selectNodeContents(node);
+						if (nodeRange.compareBoundaryPoints(Range.END_TO_END, range) < 1) {
+							return NodeFilter.FILTER_ACCEPT;
+						} else {
+							return NodeFilter.FILTER_REJECT;
+						}
+					}, false);
+					var charCount = 0;
+					while (treeWalker.nextNode()) {
+						charCount += treeWalker.currentNode.length;
+					}
+					if (range.startContainer.nodeType == 3) {
+						charCount += range.startOffset;
+					};
+					return charCount;
+				}
+				var handleItem = function (div, i) {
+					var textSpan = document.createElement('div');
+					textSpan.className = 'item_text item_style';
+					var setText = function () {
+						// var nl = textSpan.childNodes;
+						// while(nl.length>0) {
+						// 	textSpan.removeChild(nl.item(0));
+						// }
+						textSpan.textContent = texts[i].substr(0, 3);
+						var span = document.createElement('span');
+						span.textContent = texts[i].substr(3);
+						span.className = 'item_text_bold';
+						textSpan.appendChild(span);
+					};
+					setText();
+					div.appendChild(textSpan);
+					var focused = false;
+					var unfocus = function (textarea) {
+						if (!focused) {
+							return;
+						};
+						focused = false;
+						div.classList.remove('item_focus');
+						div.removeChild(textarea);
+					};
+					div.addEventListener('click', function (evt) {
+						// Start edit
+						if (focused) {
+							return;
+						};
+						var cursorPos = getCursorPos(textSpan);
+						// console.log('Click', i, window.getSelection(), cursorPos);
+						focused = true;
+						var textarea = document.createElement('textarea');
+						textarea.className = 'item_editor item_style';
+						textarea.value = texts[i];
+						div.appendChild(textarea);
+						textarea.addEventListener('blur', function (evt) {
+							unfocus(textarea);
+						});
+						textarea.addEventListener('input', function (evt) {
+							var text = textarea.value;
+							// console.log('Text:', text, textarea.selectionEnd);
+							texts[i] = text;
+							setText();
+							evt.preventDefault();
+							return false;
+						});
+						div.classList.add('item_focus');
+						textarea.focus();
+						textarea.selectionStart = cursorPos;
+						setTimeout(function () {
+						}, 10);
+					});
+				};
+				var root = document.getElementById('root');
+				var texts = [];
+				for (var i = 0; i < 50; i++) {
+					var div = document.createElement('div');
+					div.className = 'item';
+					root.appendChild(div);
+					texts.push('Text 0'+i);
+					handleItem(div, i);
+				};
+			});
+        </script>
+        <style type="text/css">
+        	body {
+        		font-size: 1em;
+        	}
+        	.root {
+        		margin: 2em;
+        		padding: 1em;
+        		border: 1px solid #aaaaaa;
+        	}
+        	.item {
+        		margin: 0.4em;
+        		margin-left: 1em;
+        		position: relative;
+        	}
+        	.item_style {
+        		font-family: sans-serif;
+        		font-size: 1em;
+        		padding: 0;
+        		line-height: 1.2em;
+        		vertical-align: baseline;
+        		letter-spacing: normal;
+        		word-wrap: break-word;
+        	}
+        	.item:hover {
+        		cursor: text;
+        	}
+        	.item_text {
+        		margin: 0;
+        		display: block;
+        		white-space: pre-wrap;
+        	}
+        	.item_editor {
+        		position: absolute;
+        		left: 0;
+        		top: 0;
+        		margin: 0;
+        		border: 0;
+        		width: 100%;
+        		height: 100%;
+        		resize: none;
+        		border: 0;
+        		background-color: transparent;
+        		outline: none;
+        		display: block;
+        		overflow: hidden;
+        	}
+        	.item_focus .item_text {
+        		visibility: hidden;
+        	}
+        	.item_text_bold {
+        		text-decoration: line-through;
+        	}
+        </style>
+    </head>
+    <body>
+    	<div class="root" id="root">
+    	</div>
+	</body>
+</html>
