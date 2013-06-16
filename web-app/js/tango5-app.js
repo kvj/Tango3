@@ -6,7 +6,7 @@ var App = function () {
 		this.wm.setUIProvider(this.ui);
 		this.ui.log('App started', this.ui.width(), this.ui.height());
 		var lines = [];
-		for (var i = 0; i < 50; i++) {
+		for (var i = 0; i < 20; i++) {
 			lines.push('Line no '+i);
 		};
 		var provider = new tango5.PlainTextController();

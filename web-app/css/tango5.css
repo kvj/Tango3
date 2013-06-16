@@ -9,6 +9,10 @@ body {
 	font-family: Consolas, Monospace;
 	font-size: 1em;
 	min-height: 1.25em;
+	padding: 0;
+	line-height: 1.25em;
+	vertical-align: baseline;
+	letter-spacing: normal;
 }
 
 .hidden_text_measure {
@@ -28,6 +32,7 @@ body {
 	position: absolute;
 	box-sizing: content-box;
 	background-color: #eeeeee;
+	overflow: hidden;
 }
 
 .window_frame {
@@ -38,7 +43,37 @@ body {
 	position: absolute;
 	left: 0;
 	top: 0;
-	bottom: 0;
 	right: 1em;
+	overflow: hidden;
+}
+
+.window_line {
+	position: relative;
+}
+
+.window_line_in_edit {
+	background-color: #dddddd;
+}
+
+.window_line_in_edit .window_line_content {
+	visibility: hidden;
+}
+
+.window_line_clickable {
+	cursor: pointer;
+}
+
+.window_line_edit {
+	position: absolute;
+	left: 0;
+	top: 0;
+	margin: 0;
+	border: 0;
+	width: 100%;
+	height: 100%;
+	resize: none;
+	background-color: transparent;
+	outline: none;
+	display: block;
 	overflow: hidden;	
 }

@@ -1,0 +1,21 @@
+.theme_var {
+	color: #aa0000;
+}
+
+.theme_const {
+	color: #0000aa;
+	font-weight: bold;
+}
+
+.theme_clickable {
+	font-weight: bold;
+	color: #888800;
+}
+
+.theme_clickable:hover {
+	color: #222200;
+}
+
+.theme_clickable:active {
+	background-color: #cccccc;
+}
