@@ -40,11 +40,9 @@ body {
 }
 
 .window_contents {
-	position: absolute;
-	left: 0;
-	top: 0;
-	right: 1em;
+	margin-right: 1em;
 	overflow: hidden;
+	position: relative;
 }
 
 .window_line {
@@ -76,4 +74,12 @@ body {
 	outline: none;
 	display: block;
 	overflow: hidden;	
+}
+
+.window_line_focus {
+	background-color: #dddddd;
+}
+
+.window_line_single {
+	white-space: nowrap;
 }

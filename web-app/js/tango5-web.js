@@ -56,6 +56,11 @@ UIProvider.prototype.setListeners = function() {
 			case 9: return handle('tab');
 		}
 	}.bind(this));
+	window.addEventListener('resize', function (evt) {
+		this.events.emit('resize', {
+
+		});
+	}.bind(this));
 };
 
 UIProvider.prototype.oneChar = function() {
@@ -93,14 +98,28 @@ UIProvider.prototype.addLayer = function() {
 
 UIProvider.prototype.moveWindow = function(context, bounds) {
 	var oneChar = this.oneChar();
-	this.log('moveWindow', context, oneChar, bounds);
+	// this.log('moveWindow', context, oneChar, bounds);
 	var px = function (val) {
 		return ""+val+"px";
 	}
 	context.div.style.left = px((bounds[0] || 0)*oneChar.width);
 	context.div.style.top = px((bounds[1] || 0)*oneChar.height);
 	context.div.style.width = px((bounds[2] || 0)*oneChar.width);
-	context.div.style.height = px((bounds[3] || 0)*oneChar.height);
+	if (bounds[3]>0) {
+		// Have height
+		context.div.style.height = px((bounds[3] || 0)*oneChar.height);
+	} else {
+		delete context.div.style.height;
+	}
+};
+
+UIProvider.prototype.windowSize = function(context) {
+	// Calculates visible part of window, by context
+	var oneChar = this.oneChar();
+	return {
+		width: Math.round(context.div.offsetWidth/oneChar.width), 
+		height: Math.round(context.div.offsetHeight/oneChar.height)
+	};
 };
 
 UIProvider.prototype.createWindow = function(layer, config) {
@@ -123,7 +142,7 @@ UIProvider.prototype.createWindow = function(layer, config) {
 	return ctx;
 };
 
-UIProvider.prototype.clearWindow = function(ctx, minStyle, handler) {
+UIProvider.prototype.clearWindow = function(ctx, config, handler) {
 	// Removes all lines and creates new empty lines. Called at startup, resize
 	this.text(ctx.contentsDiv);
 	var lines = 0;
@@ -131,9 +150,9 @@ UIProvider.prototype.clearWindow = function(ctx, minStyle, handler) {
 		var line = this.el('div', ctx.contentsDiv, {
 			'class': 'window_line default_text'
 		});
-		if (minStyle) {
+		if (config.minStyle) {
 			// Also add minStyle
-			line.classList.add(minStyle);
+			line.classList.add(config.minStyle);
 		};
 		var span = this.el('div', line, {
 			'class': 'window_line_content'
@@ -148,7 +167,18 @@ UIProvider.prototype.clearWindow = function(ctx, minStyle, handler) {
 			});
 		}.bind(this));
 	}.bind(this);
-	while(ctx.contentsDiv.offsetHeight<ctx.div.offsetHeight || lines == 0) {
+	var noMoreLines = function (lines) {
+		if (lines == 0) {
+			// Need at least one line
+			return false;
+		};
+		if (config.autoHeight>0) {
+			// Create as many as can have
+			return lines == config.autoHeight;
+		};
+		return ctx.contentsDiv.offsetHeight>=ctx.div.offsetHeight;
+	}.bind(this);
+	while (!noMoreLines(lines)) {
 		render(lines);
 		lines++;
 	}
@@ -186,6 +216,13 @@ UIProvider.prototype.getCursorPos = function (div) {
 	return charCount;
 };
 
+UIProvider.prototype.clearFocus = function(ctx) {
+	var nl = ctx.contentsDiv.querySelectorAll('.window_line_focus');
+	for (var i = 0; i < nl.length; i++) {
+		nl[i].classList.remove('window_line_focus');
+	};
+};
+
 UIProvider.prototype.windowShowLine = function(ctx, index, line, handler) {
 	// Renders line
 	var lineDiv = ctx.contentsDiv.childNodes[index];
@@ -194,16 +231,25 @@ UIProvider.prototype.windowShowLine = function(ctx, index, line, handler) {
 		return;
 	};
 	var span = lineDiv.childNodes[0];
+	if (line.single) {
+		// No wrap
+		span.classList.add('window_line_single');
+	} else {
+		span.classList.remove('window_line_single');
+	}
+	span.style.textAlign = line.align || 'left';
 	this.text(span);
 	var text = line.display || line.text;
 	var enableClick = function (color, sp) {
 		// Handles click
 		sp.addEventListener('click', function (evt) {
-			ctx.events.emit('clickable', {
+			var result = ctx.events.emit('clickable', {
 				index: index,
 				color: color
 			});
-			evt.stopPropagation();
+			if (false == result) {
+				evt.stopPropagation();
+			};
 			return false;
 		});
 	}.bind(this);
@@ -232,6 +278,15 @@ UIProvider.prototype.windowShowLine = function(ctx, index, line, handler) {
 		};
 	}.bind(this);
 	processColors(line.colors, span);
+	if (line.focus) {
+		// This line will be focused - remove focus from others
+		this.clearFocus(ctx);
+		lineDiv.classList.add('window_line_focus');
+		ctx.events.emit('focus', {
+			index: index,
+			position: -1
+		});
+	};
 	if (handler) {
 		handler();
 	};
@@ -263,6 +318,10 @@ UIProvider.prototype.windowEditLine = function(ctx, index, line, position) {
 		// Invalid
 		return;
 	};
+	var nl = ctx.contentsDiv.querySelectorAll('.window_line_focus');
+	for (var i = 0; i < nl.length; i++) {
+		nl[i].classList.remove('window_line_focus');
+	};
 	if (lineDiv.dataset.edit) {
 		// Already in edit - ignore or move cursor?
 		this.events.emit('focus', {
@@ -273,13 +332,28 @@ UIProvider.prototype.windowEditLine = function(ctx, index, line, position) {
 	};
 	// this.log('Edit', index, line, position, line.text.length);
 	lineDiv.dataset.edit = 'edit';
-	var textarea = this.el('textarea', lineDiv, {
-		'class': 'window_line_edit default_text'
-	});
+	var textarea = null;
+	if (line.single) {
+		// No wrap
+		textarea = this.el('input', lineDiv, {
+			'class': 'window_line_edit default_text window_line_single',
+			'type': line.password? 'password': 'text'
+		});
+	} else {
+		textarea = this.el('textarea', lineDiv, {
+			'class': 'window_line_edit default_text'
+		});		
+	}
 	textarea.value = line.text;
 	lineDiv.classList.add('window_line_in_edit');
 	textarea.focus();
-	textarea.selectionStart = position || 0;
+	if (position == -1) {
+		// Move to last
+		textarea.selectionStart = (line.text || '').length;
+	} else {
+		textarea.selectionStart = position || 0;
+	}
+	textarea.selectionEnd = textarea.selectionStart;
 	textarea.addEventListener('blur', function (evt) {
 		ctx.events.emit('focus', {
 			index: index,
@@ -351,7 +425,7 @@ UIProvider.prototype.text = function(el, text, softspace) {
 		for (var i = 0; i < text.length; i++) {
 			if (text.charAt(i) == ' ') {
 				// Space
-				el.innerHTML += '&nbsp;';
+				el.innerHTML += '&nbsp;'+String.fromCharCode(0x200B);
 			} else {
 				el.innerHTML += text.charAt(i);
 			}

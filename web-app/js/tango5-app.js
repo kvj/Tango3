@@ -18,6 +18,16 @@ var App = function () {
 			controller: provider
 		});
 		this.wm.addFrame(this.frame);
+		var dialog = new tango5.FixedListController([tango5.windowFactory.lineCaption('Hi Korea!', 'center'),tango5.windowFactory.lineTextEditor('', 'Enter text:'), tango5.windowFactory.lineCaption('Hi Korea!'), tango5.windowFactory.lineButtons(['OK', 'Cancel'])]);
+		var dialogFrame = new tango5.CenterWindowFrame({
+			width: 50,
+			height: 0,
+			frame: true,
+			autoHeight: 4,
+			selected: 1,
+			controller: dialog
+		});
+		this.wm.addFrame(dialogFrame);
 	}.bind(this));	
 };
 

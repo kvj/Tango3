@@ -155,6 +155,50 @@ PlainTextController.prototype.edit = function(index, type, text) {
 	};
 };
 
+var FixedListController = function (items) {
+	this.items = items || [];
+};
+
+FixedListController.prototype = new WindowController();
+
+FixedListController.prototype.size = function() {
+	// Returns number of lines
+	return this.items.length;
+};
+
+FixedListController.prototype.line = function(index) {
+	// Returns information about current line (text, colors, parameters)
+	if (index>=this.items.length || index<0) {
+		// Out of range
+		return null;
+	};
+	var clone = function (obj, skip) {
+		var n = {};
+		for (var id in obj) {
+			if (skip && skip.indexOf(id) != -1) {
+				// Found in skip
+				continue;
+			};
+			n[id] = obj[id];
+		}
+		return n;
+	}
+	var item = this.items[index];
+	var result = clone(item);
+	return result;
+};
+
+FixedListController.prototype.edit = function(index, type, text) {
+	// Called when user edited text
+	var item = this.items[index];
+	if (item && item.edit && type == 'edit') {
+		// Accept edit
+		item.text = text;
+		return true;
+	};
+	return false;
+};
+
 var UIProvider = function () {
 	// Will draw frames, windows, emit click, scroll, key events
 	// Developers will override this for every supported terminal
@@ -187,7 +231,15 @@ UIProvider.prototype.createWindow = function(layer, config) {
 	return {};
 };
 
-UIProvider.prototype.clearWindow = function(ctx, minStyle, handler) {
+UIProvider.prototype.moveWindow = function(context, bounds) {
+	// Moves window by bounds provided
+};
+
+UIProvider.prototype.windowSize = function(context) {
+	// Calculates visible part of window, by context
+};
+
+UIProvider.prototype.clearWindow = function(ctx, config, handler) {
 	// Removes all lines and creates new empty lines. Called at startup, resize
 };
 
@@ -215,7 +267,7 @@ UIProvider.prototype.windowEditorState = function(ctx, index) {
 	// Returns entered state and cursor position, if available
 };
 
-var WindowProvider = function (config, layer, ui) {
+var WindowProvider = function (config, layer, ui, handler) {
 	// Will be the bridge UI provider and data controller. Frame will decide which window will receive events
 	this.config = config;
 	this.ui = ui;
@@ -235,7 +287,12 @@ var WindowProvider = function (config, layer, ui) {
 	}.bind(this));
 	this.from = config.from || 0;
 	this.selected = null;
-	this.redrawLines('create');
+	this.redrawLines('create', function () {
+		if (config.selected>=0) {
+			this.focus(config.selected - this.from, this.data.line(config.selected), config.position || 0);
+		};
+		handler();
+	}.bind(this));
 };
 
 WindowProvider.prototype.colorize = function(text, colors) {
@@ -305,15 +362,26 @@ WindowProvider.prototype.ensureVisible = function(index) {
 	return index;
 };
 
+WindowProvider.prototype.focus = function(index, line, position) {
+	// Edit or select line
+	if (!line) {
+		return false;
+	};
+	// this.ui.log('focus', index, line, position);
+	if (line.edit) {
+		// Can edit
+		this.ui.windowEditLine(this.ctx, index, line, position);
+	} else {
+		// Just select
+		this.showLine(index, line, true);
+	}
+};
+
 WindowProvider.prototype.onClick = function(index, position) {
 	// Handle click
 	var line = this.data.line(index+this.from);
 	index = this.ensureVisible(index);
-	if (line && line.edit) {
-		// Can edit
-		this.ui.windowEditLine(this.ctx, index, line, position);
-	};
-	// TODO: Support selection
+	this.focus(index, line, position);
 };
 
 WindowProvider.prototype.onFocus = function(index, position) {
@@ -325,12 +393,13 @@ WindowProvider.prototype.onFocus = function(index, position) {
 	}
 };
 
-WindowProvider.prototype.showLine = function(idx, line) {
+WindowProvider.prototype.showLine = function(idx, line, focus) {
 	// Prepares colors and shows line
 	var colors = line.colors || [];
 	var text = line.display || line.text;
 	colors.splice(0, 0, {from: 0, length: text.length});
 	line.colors = this.colorize(text, colors);
+	line.focus = focus;
 	this.ui.windowShowLine(this.ctx, idx, line);
 };
 
@@ -351,14 +420,14 @@ WindowProvider.prototype.onChange = function(evt) {
 	};
 };
 
-WindowProvider.prototype.redrawLines = function(reason) {
+WindowProvider.prototype.redrawLines = function(reason, handler) {
 	// Remove all lines and create new empty lines
-	this.ui.clearWindow(this.ctx, this.config.minStyle, function () {
-		this.showLines(reason);
+	this.ui.clearWindow(this.ctx, this.config, function () {
+		this.showLines(reason, handler);
 	}.bind(this));
 };
 
-WindowProvider.prototype.showLines = function(reason) {
+WindowProvider.prototype.showLines = function(reason, handler) {
 	// Fill lines started from this.from
 	if (this.from>=this.data.size()) {
 		this.from = this.data.size()-1;
@@ -376,6 +445,9 @@ WindowProvider.prototype.showLines = function(reason) {
 			};
 		};
 		this.showLine(i, line);
+	};
+	if (handler) {
+		handler();
 	};
 };
 
@@ -395,11 +467,23 @@ WindowProvider.prototype.moveCursor = function(dir) {
 		};
 	};
 	var pos = cursor.position;
-	if (dir == 'left' && pos != 0) {
-		return true;
+	if (dir == 'left') {
+		if (pos != 0) {
+			return;
+		};
+		var prevLine = this.data.line(idx-1);
+		if (!prevLine || !prevLine.edit) {
+			return;
+		};
 	};
-	if (dir == 'right' && line && pos != cursor.text.length) {
-		return true;
+	if (dir == 'right' && line) {
+		if (pos != cursor.text.length) {
+			return;
+		};
+		var nextLine = this.data.line(idx+1);
+		if (!nextLine || !nextLine.edit) {
+			return;
+		};
 	};
 	this.ui.windowFinishEditLine(this.ctx, idx-this.from);
 	var page = this.ui.windowLines(this.ctx);
@@ -427,19 +511,26 @@ WindowProvider.prototype.moveCursor = function(dir) {
 		idx += page;
 	};
 	if (idx>=this.data.size()) {
-		// To big
+		// Too big
 		idx = this.data.size()-1;
-		this.from = idx; // Most simple
+		if (this.config.autoHeight) {
+			this.from = 0;
+		} else {
+			this.from = idx; // Most simple
+		}
 		this.showLines('cursor');
 	};
 	if (idx<this.from) {
 		// Moved to top
+		if (this.config.autoHeight) {
+			idx = 0;
+		}
 		this.from = idx; // Most simple
 		this.showLines('cursor');
 	};
 	var lineIndex = idx - this.from; // lineIndex is local to page
 	lineIndex = this.ensureVisible(lineIndex); // Line is visible
-	this.ui.windowEditLine(this.ctx, lineIndex, this.data.line(lineIndex+this.from), pos);
+	this.focus(lineIndex, this.data.line(lineIndex+this.from), pos);
 	return false;
 };
 
@@ -562,12 +653,18 @@ CenterWindowFrame.prototype.visible = function() {
 
 CenterWindowFrame.prototype.bounds = function() {
 	// Returns 4 coordinates - left, top, width, height of frame
-	return [0, 0, 0, 0];
+	return [0, 0, this.ui.width(), this.ui.height()];
 };
 
 CenterWindowFrame.prototype.center = function() {
+	var size = this.ui.windowSize(this.windowCtx.ctx);
+	var height = this.windowConfig.height;
+	if (!height) {
+		height = size.height;
+	};
 	this.windowConfig.x = Math.floor((this.ui.width()-this.windowConfig.width)/2);
-	this.windowConfig.y = Math.floor((this.ui.height()-this.windowConfig.height)/2);
+	this.windowConfig.y = Math.floor((this.ui.height()-height)/2);
+	this.ui.moveWindow(this.windowCtx.ctx, [this.windowConfig.x, this.windowConfig.y, this.windowConfig.width, this.windowConfig]);
 };
 
 CenterWindowFrame.prototype.resize = function(width, height) {
@@ -582,8 +679,10 @@ CenterWindowFrame.prototype.bind = function(layer, ui) {
 	if (this.windowConfig.width>ui.width()) {
 		this.windowConfig.width = ui.width();
 	};
+	this.windowCtx = new WindowProvider(this.windowConfig, layer, ui, function () {
+		// Window is displayed first time, size is clear
+	});
 	this.center();
-	this.windowCtx = new WindowProvider(this.windowConfig, layer, ui);
 };
 
 CenterWindowFrame.prototype.keyPress = function(evt) {
@@ -606,7 +705,10 @@ WindowFrameManager.prototype.addFrame = function(frame) {
 WindowFrameManager.prototype.setUIProvider = function(provider) {
 	this.ui = provider;
 	this.ui.events.on('resize', function (evt) {
-		// When UI resized
+		for (var i = this.frames.length - 1; i >= 0; i--) {
+			var frame = this.frames[i];
+			frame.resize();
+		};
 	}.bind(this));
 	this.ui.events.on('key', function (evt) {
 		// When key pressed
@@ -618,9 +720,57 @@ WindowFrameManager.prototype.onKeyPress = function(evt) {
 	// Pass buttons to every frame
 	for (var i = this.frames.length - 1; i >= 0; i--) {
 		var frame = this.frames[i];
-		if (false == frame.keyPress(evt)) {
+		var result = frame.keyPress(evt);
+		if (false == result) {
 			return false;
 		};
+		if (true != result) {
+			// Not set to true
+			break;
+		};
+	};
+};
+
+var WindowFactory = function () {
+	// Will hold functions for creating windows and dialogs, window fragments
+};
+
+WindowFactory.prototype.lineTextEditor = function(value, hint) {
+	var result = {
+		text: value,
+		edit: true,
+		single: 'middle'
+	};
+	return result;
+};
+
+WindowFactory.prototype.lineCaption = function(value, align, style, colors) {
+	return {
+		text: value,
+		align: align || 'left'
+	};
+};
+
+WindowFactory.prototype.lineButtons = function(captions, handler) {
+	var colors = [];
+	var text = '';
+	for (var i = 0; i < captions.length; i++) {
+		if (i>0) {
+			text += ' ';
+		};
+		var start = text.length;
+		text += '['+captions[i]+']';
+		colors.push({
+			from: start,
+			length: captions[i].length+2,
+			color: 'clickable',
+			clickable: true
+		});
+	};
+	return {
+		align: 'center',
+		colors: colors,
+		text: text
 	};
 };
 
@@ -631,6 +781,8 @@ window.tango5 = {
 	WindowFrameManager: WindowFrameManager,
 	CenterWindowFrame: CenterWindowFrame,
 	PlainTextController: PlainTextController,
+	FixedListController: FixedListController,
+	windowFactory: new WindowFactory(),
 	EventEmitter: EventEmitter
 };
 
