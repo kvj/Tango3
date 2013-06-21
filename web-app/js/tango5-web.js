@@ -270,6 +270,9 @@ UIProvider.prototype.windowShowLine = function(ctx, index, line, handler) {
 				sp.classList.add('window_line_clickable');
 				enableClick(item.color, sp);
 			};
+			if (item.color && item.color.focused) {
+				sp.classList.add('window_line_focused');
+			};
 			if (item.children.length == 0) {
 				this.text(sp, text.substr(item.from, item.length));
 			} else {

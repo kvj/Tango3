@@ -451,6 +451,45 @@ WindowProvider.prototype.showLines = function(reason, handler) {
 	};
 };
 
+WindowProvider.prototype.handleCursorClickable = function(dir, index, line) {
+	if (!line || line.edit) {
+		// Have editor
+		return;
+	};
+	var clickables = [];
+	var colors = line.colors || [];
+	var index = 0;
+	for (var i = 0; i < colors.length; i++) {
+		var color = colors[i];
+		if (color.clickable) {
+			if (color.focused) {
+				index = clickables.length;
+				delete color.focused;
+			};
+			clickables.push(color);
+		};
+	};
+	if (clickables.length == 0) {
+		return;
+	};
+	if ('left' == dir) {
+		index--;			
+		if (index<0) {
+			index = clickables.length-1;
+		};
+	} else if ('right' == dir || 'tab' == dir) {
+		index++;
+		if (index>=clickables.length) {
+			// Reset to 0
+			index = 0;
+		};
+	} else {
+		return;
+	}
+	clickables[index].focused = true;
+	return false;
+};
+
 WindowProvider.prototype.moveCursor = function(dir) {
 	// Move cursor
 	if (!this.selected) {
@@ -467,6 +506,14 @@ WindowProvider.prototype.moveCursor = function(dir) {
 		};
 	};
 	var pos = cursor.position;
+	var handleClickable = this.handleCursorClickable(dir, idx, line);
+	if (false == handleClickable) {
+		// Means something changed
+		var lineIndex = idx - this.from; // lineIndex is local to page
+		lineIndex = this.ensureVisible(lineIndex); // Line is visible
+		this.focus(lineIndex, this.data.line(lineIndex+this.from), pos);
+		return false;
+	};
 	if (dir == 'left') {
 		if (pos != 0) {
 			return;

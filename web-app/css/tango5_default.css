@@ -19,3 +19,7 @@
 .theme_clickable:active {
 	background-color: #cccccc;
 }
+
+.window_line_focused {
+	background-color: #bbbbbb;
+}
