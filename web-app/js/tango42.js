@@ -483,6 +483,7 @@ NotepadController.prototype.isInEdit = function() {
 
 var App = function () {
 	// $$.log('App started', this.pxInEm(document.body));
+	this.titleCache = {};
 	this.events = new EventEmitter(this);
     window.addEventListener('resize', function(e) {//Auto resize
     	this.resize();
@@ -949,7 +950,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	// Renders link to item
 	var div = this.el('div', parent, {
 		'class': 'item_link'
-	}, 'Loading...');
+	}, this.titleCache[id] || 'Loading...');
 	if (id.startsWith('#')) {
 		// Tag rendering
 		div.classList.add('item_link_tag');
@@ -959,7 +960,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	};
 	var enableClick = function (item) {
 		div.classList.add('item_link_ok');
-		// this.titleCache[id] = item.title || '<Untitled>';
+		this.titleCache[id] = item.title || '<Untitled>';
 		this.text(div, this.titleCache[id], true);
 		div.title = item.title;
 		div.addEventListener('click', function (evt) {
