@@ -1,0 +1,28 @@
+{
+	"wiki": {
+		"version": 1307081113,
+		"index": "index.tmpl.html",
+		"main": "tango4.tmpl.html",
+		"analytics": "analytics.txt",
+		"cache": [
+			"js/common.js",
+			"lib/layout.js",
+			"js/tango4.css",
+			"js/tango2.js",
+			"js/tango4.js"
+		],
+		"network": ["*"]
+	},
+	"note": {
+		"version": 1307081117,
+		"index": "index.tmpl.html",
+		"main": "tango42.tmpl.html",
+		"cache": [
+			"js/common.js",
+			"js/tango42.css",
+			"js/tango2.js",
+			"js/tango42.js"
+		],
+		"network": ["*"]
+	}
+}

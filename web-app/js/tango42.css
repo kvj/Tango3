@@ -1,0 +1,464 @@
+body {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+.top {
+	height: 2em;
+	background-color: #eeeeee;
+	border-bottom: 1px solid #dddddd;
+}
+
+.pane {
+	border: 2px solid #eeeeee;
+	top: 2em;
+	position: absolute;
+	bottom: 0;
+	box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	background-color: #ffffff;
+}
+
+.left {
+	left: 0;
+	width: 15em;
+	max-width: 90%;
+	z-index: 10;
+}
+
+.left_item {
+	margin: 0.2em;
+	border: 1px solid #aaaaaa;
+	padding: 0.2em;
+	cursor: pointer;
+	font-family: sans-serif;
+}
+
+.panel_content {
+	position: absolute;
+	left: 0;
+	top: 2em;
+	right: 0;
+	bottom: 0;
+}
+
+.scroll {
+	overflow: auto;
+}
+
+.left_hidden .left {
+	display: none;
+}
+
+.right {
+	right: 0;
+	left: 15em;
+	text-align: center;
+	vertical-align: middle;
+	line-height: 100%;
+}
+
+.left_hidden .right {
+	left: 0;
+}
+
+.window_narrow .right {
+	left: 0;
+}
+
+.sync_buttons {
+	float: right;
+}
+
+.top_controls {
+	padding: 0.2em;
+	vertical-align: middle;
+}
+
+.fade {
+    animation-duration: 1s;
+    animation-name: fade;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: fade;
+}
+
+@keyframes fade {
+    from {
+        opacity: 1.0;
+    }
+    to {
+        opacity: 0.0;
+    }
+}
+
+@-webkit-keyframes fade {
+    from {
+        opacity: 1.0;
+    }
+    to {
+        opacity: 0.0;
+    }
+}
+
+.blink {
+    display: block !important;
+    animation-duration: 1s;
+    animation-name: blink;
+    animation-iteration-count: infinite;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: blink;
+    -webkit-animation-iteration-count: infinite;
+}
+
+@keyframes blink {
+    from {
+        opacity: 1.0;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    to {
+        opacity: 1.0;
+    }
+}
+
+@-webkit-keyframes blink {
+    from {
+        opacity: 1.0;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    to {
+        opacity: 1.0;
+    }
+}
+
+#messages_list {
+	position: fixed;
+	left: 1em;
+	top: 0;
+	font-size: 0.9em;
+	font-weight: bold;
+	font-family: sans-serif;
+}
+
+.message {
+	width: 16em;
+	margin: 0.5em;
+	padding: 0.3em;
+	text-align: center;
+	color: #ffffff;
+	background-color: #336699;
+	cursor: pointer;
+}
+
+.message_error {
+	background-color: #aa2222;
+}
+
+#pending_message {
+	display: none;
+	width: 16em;
+	position: fixed;
+	top: 0;
+	left: 50%;
+	margin: 0.5em;
+	margin-left: -8em;
+	padding: 0.3em;
+	text-align: center;
+	color: #ffffff;
+	background-color: #aa2222;
+	font-size: 0.9em;
+	font-weight: bold;
+	font-family: sans-serif;
+}
+
+.card {
+	border: 1px solid #aaaaaa;
+	font-family: sans-serif;
+	box-sizing: border-box;
+	background-color: #ffffff;
+	box-shadow: 1px 1px 1px #888888;
+	min-height: 100%;
+}
+
+.card_focus {
+	box-shadow: 0px 0px 3px 3px #888888;	
+}
+
+.card_width_2 {
+	width: 22em;
+}
+
+.card_width_3 {
+	width: 30.4em;
+}
+
+.layout_narrow .card {
+	width: 100%;
+}
+
+.card_full_width {
+	width: 100% !important;
+}
+
+.card_title {
+	padding: 0.2em;
+	background-color: #dddddd;
+	cursor: pointer;
+}
+
+.card_title_text {
+	font-weight: bold;
+	font-size: 1em;
+}
+
+.card_body {
+	min-height: 18em;
+}
+
+.card_body_contents {
+	padding: 0.2em;
+	font-size: 0.8em;
+}
+
+.card_bottom {
+	min-height: 2em;
+	background-color: #eeeeee;
+	padding: 0.1em;
+}
+
+.card_tags {
+	font-size: 0.8em;
+}
+
+.card_float_panel {
+	text-align: right;
+	padding: 0.2em;
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+
+.card_edit {
+	padding: 0.4em;
+	padding-right: 0.8em;
+}
+
+.item_edit_text {
+	margin: 0;
+	padding: 0.2em;
+	width: 100%;
+	margin-top: 0.5em;
+	font-size: 0.8em;
+}
+
+.item_edit_area {
+	margin: 0;
+	padding: 0.2em;
+	width: 100%;
+	font-family: sans-serif;
+	font-size: 0.8em;
+	margin-top: 0.5em;
+}
+
+.card_edit_buttons {
+	text-align: right;
+	margin-right: -0.4em;
+}
+
+.item_button {
+	padding: 0.2em;
+	margin: 0.1em;
+	font-size: 0.8em;
+	background-color: #eeeeee;
+	border: 1px solid #888888;
+	vertical-align: middle;
+}
+
+.item_button:active {
+	background-color: #dddddd;
+}
+
+.item_title_1 {
+	font-weight: bold;
+}
+
+.item_title_2 {
+	font-size: 1.1em;
+	font-weight: bold;
+}
+
+.item_title_3 {
+	font-size: 1.15em;
+	font-weight: bold;
+}
+
+.item_table {
+	border-collapse: collapse;
+	width: 100%;
+	padding: 0;
+}
+
+.item_td {
+	margin: 0.1em;
+}
+
+.item_td_wrap {
+	position: relative;
+}
+
+.item_tr {
+	height: 1.2em;
+	vertical-align: top;
+}
+
+.item_td_edit {
+	cursor: pointer;
+}
+
+.item_td_edit:hover {
+	background-color: #efefef;
+}
+
+.item_td_edit_selected {
+	background-color: #eeeeee;
+	overflow: visible;
+}
+
+.item_td_text_edit {
+	font-size: 1em;
+}
+
+.item_td_button {
+	font-size: 1em;
+}
+
+.item_td_editor {
+	padding-right: 0.8em;
+}
+
+.td_float_panel {
+	font-size: 1.3em;
+	position: absolute;
+	right: 0;
+	top: 0;
+	padding: 0.2em;
+	display: none;
+	z-index: 1;
+}
+
+.item_td_edit_selected .td_float_panel {
+	display: block;
+}
+
+.item_link {
+	display: inline-block;
+	padding: 0.1em;
+	height: 1.2em;
+	vertical-align: middle;
+	margin: 0.1em;
+	border: 1px solid #888888;
+	border-radius: 0.3em;
+	background-color: #ddffdd;
+	cursor: progress;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
+.item_link:active {
+	background-color: #aaaaaa;
+}
+
+.item_link_ok {
+	cursor: pointer;
+}
+
+.item_link_err {
+	background-color: #ddffdd;
+}
+
+.item_link_tag {
+	cursor: pointer;
+	background-color: #ddffff;
+}
+
+.clear {
+	clear: both;
+}
+
+.star {
+    text-decoration: none;
+    font-size: 1.3em;
+    padding-right: 0.2em;
+    font-family: "Arial Unicode MS", Arial;
+}
+
+.starOn {
+    color: #dd8800;
+}
+
+.starOff {
+    color: #000000;
+}
+
+.indicator {
+	display: inline-block;
+	width: 0.5em;
+	height: 0.5em;
+	margin: 0.2em;
+	border: 1px solid #222222;
+	background-color: #dd8800;
+	vertical-align: middle;
+}
+
+.indicator_ok {
+	background-color: #008800;
+}
+
+.indicator_err {
+	background-color: #aa2222;
+}
+
+.align_c {
+	text-align: center;
+}
+
+.align_r {
+	text-align: right;
+}
+
+.controller_root {
+	display: inline-block;
+}
+
+.controller_panel {
+	text-align: right;
+	height: 2em;
+	line-height: 2em;
+}
+
+.controller_content {
+	padding: 0.2em;
+	text-align: left;
+}
+
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+	background-color: transparent;
+ }
+
+ ::-webkit-scrollbar-thumb {
+	background-color: #dddddd;
+	border: 1px solid #aaaaaa;
+}
+
+::-webkit-scrollbar-corner {
+	background-color: transparent;
+}

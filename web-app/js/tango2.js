@@ -342,10 +342,10 @@ DocumentsManager.prototype.sync = function(manager, handler) {
         // $$.log('prepareOwnHistory', from);
         var t = this.db.fetch('history', 'documents');
         var fetchFrom = function (cond) {
-            $$.log('fetchFrom', cond);
+            // $$.log('fetchFrom', cond);
             // Does actual fetch
-            this.list(t.objectStore('history').index('order').openCursor(cond), function (err, list) {
-                $$.log('List:', list, err);
+            this.list(cond? t.objectStore('history').index('order').openCursor(cond): t.objectStore('history').openCursor(), function (err, list) {
+                // $$.log('List:', list, err);
                 if (err) {
                     return finish(err);
                 };
@@ -384,7 +384,7 @@ DocumentsManager.prototype.sync = function(manager, handler) {
                     };
                     if (!result) {
                         // No data in history?
-                        return fetchFrom('');
+                        return fetchFrom(null);
                     };
                     fetchFrom(IDBKeyRange.lowerBound(result.value.order, false));
                 }.bind(this));
@@ -740,18 +740,19 @@ var SitesManager = function (handler) {
 }
 
 SitesManager.prototype.defaultConnection = function() {
-    var reg = /(.*\/)([a-z0-9]+)\.wiki\.html($|#|\?)/i;
+    var reg = /(.*\/)([a-z0-9]+)\.([a-z0-9]+)\.html($|#|\?)/i;
     this.dev = false;
     if (window.location.toString().indexOf('?dev=2') != -1) {
         this.dev = true;
     };
     var m = window.location.toString().match(reg);
     if(!m || m[2] == 'user') {
-        var path = window.localStorage['default_conn'];
+        var type = m? m[3]: '';
+        var path = window.localStorage['default_conn_'+type];
         if (path) {
             m = path.match(reg);
             if (m) {
-                return {url: m[1], code: m[2]};
+                return {url: m[1], code: m[2], type: type};
             }
         };
         var id = window.prompt('Please enter Container URL:');
@@ -760,7 +761,7 @@ SitesManager.prototype.defaultConnection = function() {
         };
         m = id.match(reg);
         if (m) {
-            return {url: m[1], code: m[2], path: id};
+            return {url: m[1], code: m[2], path: id, type: type};
         }
         return null;
     } else {
@@ -896,7 +897,7 @@ SitesManager.prototype.initConnection = function(conn, handler) {
                     $$.log('_addConnection', err);
                     if (!err && conn.path) {
                         // Created, but user entrered URL
-                        window.localStorage['default_conn'] = conn.path;
+                        window.localStorage['default_conn_'+conn.type] = conn.path;
                     };
                     handler(err, newData);
                 }.bind(this);
@@ -931,6 +932,10 @@ SitesManager.prototype.initConnection = function(conn, handler) {
             }.bind(this));
         } else {
             // Exist
+            if (!err && conn.path) {
+                // Created, but user entrered URL
+                window.localStorage['default_conn_'+conn.type] = conn.path;
+            };
             return handler(null, result);
         }
     }.bind(this));
