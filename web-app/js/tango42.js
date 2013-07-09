@@ -229,7 +229,7 @@ NotepadPanel.prototype.toggleVisible = function() {
 
 NotepadPanel.prototype.refresh = function(handler) {
 	var contentDiv = this.app.findEl('#left_content', this.div);
-	this.app.list({parent: 'root', sort: 'name'}, function (err, list) {
+	this.app.list({parent: 'root', sort: 'title'}, function (err, list) {
 		if (err) {
 			return this.app.showError(err);
 		};
@@ -460,7 +460,7 @@ NotepadController.prototype.refreshList = function(handler) {
 				// Not found
 				return handler();
 			};
-			for (var i = 0; i < data.length; i++) {
+			for (var i = data.length - 1; i >= 0; i--) {
 				var item = data[i];
 				items.push(item);
 			};
@@ -917,7 +917,7 @@ App.prototype.list = function(config, handler) {
 			cb(null);
 		}.bind(this));
 	}.bind(this), function (err) {
-		if ('name' == config.sort) {
+		if ('title' == config.sort) {
 			result.sort(function (a, b) {
 				if(a.title<b.title) {
 					return -1;
