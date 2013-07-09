@@ -949,7 +949,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	// Renders link to item
 	var div = this.el('div', parent, {
 		'class': 'item_link'
-	}, this.titleCache[id] || 'Loading...');
+	}, 'Loading...');
 	if (id.startsWith('#')) {
 		// Tag rendering
 		div.classList.add('item_link_tag');
@@ -959,7 +959,7 @@ App.prototype.renderLink = function(parent, id, config) {
 	};
 	var enableClick = function (item) {
 		div.classList.add('item_link_ok');
-		this.titleCache[id] = item.title || '<Untitled>';
+		// this.titleCache[id] = item.title || '<Untitled>';
 		this.text(div, this.titleCache[id], true);
 		div.title = item.title;
 		div.addEventListener('click', function (evt) {

@@ -142,6 +142,7 @@ body {
 	font-size: 0.9em;
 	font-weight: bold;
 	font-family: sans-serif;
+	z-index: 11;
 }
 
 .message {
