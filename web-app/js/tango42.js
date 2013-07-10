@@ -3,196 +3,111 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 if (typeof String.prototype.startsWith != 'function') {
-    String.prototype.startsWith = function (str){
-        return this.slice(0, str.length) == str;
-    };
+	String.prototype.startsWith = function (str){
+		return this.slice(0, str.length) == str;
+	};
 };
 
 if (typeof String.prototype.endsWith != 'function') {
-    String.prototype.endsWith = function (str){
-        return this.slice(-str.length) == str;
-    };
+	String.prototype.endsWith = function (str){
+		return this.slice(-str.length) == str;
+	};
 };
 var dateFormat = function () {
-    var token = /d{1,4}|m{1,4}|w{1,2}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
-        timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
-        timezoneClip = /[^-+\dA-Z]/g,
-        pad = function (val, len) {
-            val = String(val);
-            len = len || 2;
-            while (val.length < len) val = "0" + val;
-            return val;
-        };
+	var token = /d{1,4}|m{1,4}|w{1,2}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
+		timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
+		timezoneClip = /[^-+\dA-Z]/g,
+		pad = function (val, len) {
+			val = String(val);
+			len = len || 2;
+			while (val.length < len) val = "0" + val;
+			return val;
+		};
 
-    // Regexes and supporting functions are cached through closure
-    return function (date, mask, utc) {
-        var dF = dateFormat;
+	// Regexes and supporting functions are cached through closure
+	return function (date, mask, utc) {
+		var dF = dateFormat;
 
-        // You can't provide utc if you skip other args (use the "UTC:" mask prefix)
-        if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
-            mask = date;
-            date = undefined;
-        }
+		// You can't provide utc if you skip other args (use the "UTC:" mask prefix)
+		if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
+			mask = date;
+			date = undefined;
+		}
 
-        // Passing date through Date applies Date.parse, if necessary
-        date = date ? new Date(date) : new Date;
-        if (isNaN(date)) throw SyntaxError("invalid date");
+		// Passing date through Date applies Date.parse, if necessary
+		date = date ? new Date(date) : new Date;
+		if (isNaN(date)) throw SyntaxError("invalid date");
 
-        // Allow setting the utc argument via the mask
-        if (mask.slice(0, 4) == "UTC:") {
-            mask = mask.slice(4);
-            utc = true;
-        }
+		// Allow setting the utc argument via the mask
+		if (mask.slice(0, 4) == "UTC:") {
+			mask = mask.slice(4);
+			utc = true;
+		}
 
-        var _ = utc ? "getUTC" : "get",
-            d = date[_ + "Date"](),
-            D = date[_ + "Day"](),
-            // w = date[_ + "Week"](),
-            m = date[_ + "Month"](),
-            y = date[_ + "FullYear"](),
-            H = date[_ + "Hours"](),
-            M = date[_ + "Minutes"](),
-            s = date[_ + "Seconds"](),
-            L = date[_ + "Milliseconds"](),
-            o = utc ? 0 : date.getTimezoneOffset(),
-            flags = {
-                d:    d,
-                dd:   pad(d),
-                ddd:  dF.i18n.dayNames[D],
-                dddd: dF.i18n.dayNames[D + 7],
-                // w:    w,
-                // ww:   pad(w),
-                m:    m + 1,
-                mm:   pad(m + 1),
-                mmm:  dF.i18n.monthNames[m],
-                mmmm: dF.i18n.monthNames[m + 12],
-                yy:   String(y).slice(2),
-                yyyy: y,
-                h:    H % 12 || 12,
-                hh:   pad(H % 12 || 12),
-                H:    H,
-                HH:   pad(H),
-                M:    M,
-                MM:   pad(M),
-                s:    s,
-                ss:   pad(s),
-                l:    pad(L, 3),
-                L:    pad(L > 99 ? Math.round(L / 10) : L),
-                t:    H < 12 ? "a"  : "p",
-                tt:   H < 12 ? "am" : "pm",
-                T:    H < 12 ? "A"  : "P",
-                TT:   H < 12 ? "AM" : "PM",
-                Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
-                o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
-                S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
-            };
+		var _ = utc ? "getUTC" : "get",
+			d = date[_ + "Date"](),
+			D = date[_ + "Day"](),
+			// w = date[_ + "Week"](),
+			m = date[_ + "Month"](),
+			y = date[_ + "FullYear"](),
+			H = date[_ + "Hours"](),
+			M = date[_ + "Minutes"](),
+			s = date[_ + "Seconds"](),
+			L = date[_ + "Milliseconds"](),
+			o = utc ? 0 : date.getTimezoneOffset(),
+			flags = {
+				d:    d,
+				dd:   pad(d),
+				ddd:  dF.i18n.dayNames[D],
+				dddd: dF.i18n.dayNames[D + 7],
+				// w:    w,
+				// ww:   pad(w),
+				m:    m + 1,
+				mm:   pad(m + 1),
+				mmm:  dF.i18n.monthNames[m],
+				mmmm: dF.i18n.monthNames[m + 12],
+				yy:   String(y).slice(2),
+				yyyy: y,
+				h:    H % 12 || 12,
+				hh:   pad(H % 12 || 12),
+				H:    H,
+				HH:   pad(H),
+				M:    M,
+				MM:   pad(M),
+				s:    s,
+				ss:   pad(s),
+				l:    pad(L, 3),
+				L:    pad(L > 99 ? Math.round(L / 10) : L),
+				t:    H < 12 ? "a"  : "p",
+				tt:   H < 12 ? "am" : "pm",
+				T:    H < 12 ? "A"  : "P",
+				TT:   H < 12 ? "AM" : "PM",
+				Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
+				o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
+				S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
+			};
 
-        return mask.replace(token, function ($0) {
-            return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
-        });
-    };
+		return mask.replace(token, function ($0) {
+			return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
+		});
+	};
 }();
 
 // Internationalization strings
 dateFormat.i18n = {
-    dayNames: [
-        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-    ],
-    monthNames: [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
-    ]
+	dayNames: [
+		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+		"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+	],
+	monthNames: [
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+		"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+	]
 };
 
 // For convenience...
 Date.prototype.format = function (mask, utc) {
-    return dateFormat(this, mask, utc);
-};
-
-var EventEmitter = function(emitter) {//Creates new event emitter
-    this.events = {};
-    this.emitter = emitter;
-};
-
-EventEmitter.prototype.on = function(type, handler, top) {//Adds new handler
-    if (!type || !handler) {//Invalid params
-        return false;
-    };
-    var arr = [];
-    if (!this.events[type]) {//Add empty array
-        this.events[type] = arr;
-    } else {//Get array
-        arr = this.events[type];
-    };
-    for (var i = 0; i < arr.length; i++) {//Check for duplicate
-        if (arr[i] == handler || (arr[i].marker && arr[i].marker == handler.marker)) {//Already here
-            arr[i] = handler;
-            return false;
-        };
-    };
-    if (top) {
-        arr.splice(0, 0, handler);
-    } else {
-        arr.push(handler);
-    }
-    return true;
-};
-
-EventEmitter.prototype.off = function(type, handler) {//Removes handler
-    if (!type) {//Stop
-        return false;
-    };
-    var arr = this.events[type];
-    if (!arr) {//Stop
-        return false;
-    };
-    if (!handler) {//Remove all handlers
-        this.events[type] = [];
-        return true;
-    };
-    for (var i = 0; i < arr.length; i++) {//Look for handler
-        if (arr[i] == handler || (arr[i].marker && arr[i].marker == handler.marker)) {//Found - splice
-            arr.splice(i, 1);
-            i--;
-        };
-    };
-    return true;
-};
-
-EventEmitter.prototype.emit = function(type, evt, obj) {//Calls handlers
-    if (!type) {//Stop
-        return false;
-    };
-    if (!evt) {//Create empty
-        evt = {};
-    };
-    if (!evt.type) {//Add type
-        evt.type = type;
-    };
-    if (!evt.target) {//Add target
-        evt.target = obj || this.emitter || this;
-    };
-    var arr = this.events[type] || [];
-    var prevented = false;
-    evt.stop = function () {
-        prevented = true;
-    };
-    var arrClone = arr.slice(0);
-    for (var i = 0; i < arrClone.length; i++) {//Call handler one by one
-        // try {
-            var result = arrClone[i].call(evt.target, evt);
-            if (result == false) {//Stop executing
-                return false;
-            };
-            if (prevented) {
-                return result;
-            };
-        // } catch (e) {//Handler error
-        //     log('Error in handler:', e);
-        // }
-    };
-    return true;
+	return dateFormat(this, mask, utc);
 };
 
 var NotepadPanel = function (app) {
@@ -211,7 +126,26 @@ var NotepadPanel = function (app) {
 	button.addEventListener('click', function (evt) {
 		app.createNewItem(null, null, 'notepad');
 	}.bind(this));
-	this.refresh();
+	this.refresh(function (list) {
+		if (list.length>0) {
+			this.app.events.emit('select', {
+				item: list[0]
+			});
+		};
+	}.bind(this));
+	app.events.on(['add', 'update', 'remove'], function (evt) {
+		$$.log('change', evt.type, evt.item);
+		if (evt.item.parent == 'root') {
+			this.refresh();
+		};
+	}.bind(this));
+	app.events.on('next_notepad', function (evt) {
+		if (this.notepads && this.notepads.length>0) {
+			this.app.events.emit('select', {
+				item: this.notepads[0]
+			});
+		};
+	}.bind(this));
 };
 
 NotepadPanel.prototype.toggleVisible = function() {
@@ -235,7 +169,7 @@ NotepadPanel.prototype.refresh = function(handler) {
 		};
 		var renderItem = function (item, index) {
 			var div = this.app.el('div', contentDiv, {
-				'class': 'left_item'
+				'class': 'left_item card_title_text one_line'
 			});
 			div.addEventListener('click', function (evt) {
 				this.app.events.emit('select', {
@@ -249,6 +183,7 @@ NotepadPanel.prototype.refresh = function(handler) {
 			var item = list[i];
 			renderItem(item, i);
 		};
+		this.notepads = list;
 		if (handler) {
 			handler(list);
 		};
@@ -260,6 +195,7 @@ var NotepadController = function (app, parent) {
 	this.parent = parent;
 	this.visible = [];
 	this.buildUI();
+	this.events = new EventEmitter(this);
 	app.events.on('resize', function (evt) {
 		this.resize();
 	}.bind(this));
@@ -270,6 +206,35 @@ var NotepadController = function (app, parent) {
 			});
 		};
 	}.bind(this));
+	app.events.on('remove', function (evt) {
+		if (!this.root) {
+			return;
+		};
+		if (evt.item.parent == this.root.id) {
+			// page from our notepad - refresh list
+			this.refreshList(function () {
+			}.bind(this));
+		};
+		if (evt.item.id == this.root.id) {
+			// removed notepad - nothing to display
+			this.app.events.emit('next_notepad', {
+				item: this.root
+			});
+		};
+	}.bind(this));
+	this.events.on('remove', function (evt) {
+		// When have to select another page
+		this.refreshList(function (err, list) {
+			if (err) {
+				return;
+			};
+			var index = evt.index;
+			if (index>=list.length) {
+				index = list.length-1;
+			};
+			this.showPage(index, true);
+		}.bind(this));
+	}.bind(this));
 };
 
 NotepadController.prototype.buildUI = function(first_argument) {
@@ -277,32 +242,75 @@ NotepadController.prototype.buildUI = function(first_argument) {
 		'class': 'controller_root'
 	});
 	var topButtons = this.app.el('div', this.div, {
-		'class': 'controller_panel'
+		'class': 'controller_panel one_line'
 	});
-	var editButton = this.app.el('button', topButtons, {
-		'class': 'item_button'
+	var button = this.app.el('button', topButtons, {
+		'class': 'item_button card_no_edit'
 	}, 'Edit');
-	editButton.addEventListener('click', function (evt) {
+	button.addEventListener('click', function (evt) {
 		this.editItem();
 	}.bind(this));
-	var addButton = this.app.el('button', topButtons, {
+	button = this.app.el('button', topButtons, {
+		'class': 'item_button card_in_edit'
+	}, 'Save');
+	button.addEventListener('click', function (evt) {
+		this.sendMessage('save');
+	}.bind(this));
+	button = this.app.el('button', topButtons, {
+		'class': 'item_button card_in_edit'
+	}, 'Cancel');
+	button.addEventListener('click', function (evt) {
+		this.sendMessage('cancel');
+	}.bind(this));
+	button = this.app.el('button', topButtons, {
 		'class': 'item_button'
 	}, 'Add');
-	addButton.addEventListener('click', function (evt) {
+	button.addEventListener('click', function (evt) {
 		this.createNewItem();
 	}.bind(this));
-	var remove = this.app.el('button', topButtons, {
+	button = this.app.el('button', topButtons, {
 		'class': 'item_button'
 	}, 'Remove');
-	remove.addEventListener('click', function (evt) {
+	button.addEventListener('click', function (evt) {
+		this.removeItem();
 	}.bind(this));
-	this.contentDiv = this.app.el('div', this.div, {
+	var wrapper = this.app.el('div', this.div, {
+		'class': 'card'
+	});
+	this.cardDiv = wrapper;
+	var titleDiv = this.app.el('div', wrapper, {
+		'class': 'card_title one_line'
+	});
+	this.app.el('div', titleDiv, {
+		'class': 'card_title_text card_no_edit'
+	});
+	this.app.el('input', titleDiv, {
+		'class': 'card_editor card_title_text editor_title card_in_edit',
+		'type': 'text'
+	});
+	this.contentDiv = this.app.el('div', wrapper, {
 		'class': 'controller_content scroll'
 	});
-	var bottomButtons = this.app.el('div', this.div, {
-		'class': 'controller_panel'
+	this.app.el('div', this.contentDiv, {
+		'class': 'card_body_contents card_no_edit'
 	});
-	var button = this.app.el('button', bottomButtons, {
+	this.app.el('textarea', this.contentDiv, {
+		'class': 'card_editor card_editor_area editor_body card_in_edit'
+	});
+	var tagsDiv = this.app.el('div', wrapper, {
+		'class': 'one_line card_bottom'
+	});
+	this.app.el('span', tagsDiv, {
+		'class': 'card_tags card_no_edit'
+	});
+	this.app.el('input', tagsDiv, {
+		'class': 'card_editor editor_tags card_in_edit',
+		'type': 'text'
+	});
+	var bottomButtons = this.app.el('div', this.div, {
+		'class': 'one_line controller_panel'
+	});
+	button = this.app.el('button', bottomButtons, {
 		'class': 'item_button'
 	}, 'Left');
 	button.addEventListener('click', function (evt) {
@@ -345,11 +353,59 @@ NotepadController.prototype.editItem = function() {
 	this.visible[0]('edit');
 };
 
+NotepadController.prototype.sendMessage = function(message) {
+	if (!this.root) {
+		return;
+	};
+	for (var i = 0; i < this.visible.length; i++) {
+		this.visible[i](message);
+	};
+};
+
 NotepadController.prototype.createNewItem = function() {
 	if (!this.root) {
 		return;
 	};
 	this.app.createNewItem(this.root);
+};
+
+NotepadController.prototype.removeItem = function() {
+	if (!this.root) {
+		return;
+	};
+	var type = 'page';
+	if (this.selectedIndex == 0) {
+		type = 'notepad and all it\'s pages';
+	};
+	var item = this.pages[this.selectedIndex];
+	if (!window.confirm('Are you sure want to remove '+type+'?')) {
+		return;
+	};
+	this.refreshList(function (err, list) {
+		if (err) {
+			return this.app.showError(err);
+		};
+		var target = [item];
+		if (item.parent == 'root') {
+			// Remove all
+			target = list;
+		};
+		iterateOver(target, function (item, cb) {
+			this.app.db(item).remove(item, function (err) {
+				if (err) {
+					return cb(err);
+				};
+				this.app.events.emit('remove', {
+					item: item
+				});
+				cb(null);
+			}.bind(this));
+		}.bind(this), function (err) {
+			if (err) {
+				return this.app.showError(err);
+			};
+		}.bind(this));
+	}.bind(this));
 };
 
 NotepadController.prototype.resize = function() {
@@ -359,7 +415,7 @@ NotepadController.prototype.resize = function() {
 	};
 	this.width = 20;
 	this.height = 30;
-	var plusHeight = 4;
+	var plusHeight = 9;
 	var plusWidth = 0;
 	var inEm = this.app.pxInEm(this.parent);
 	var parentWidth = Math.floor(this.parent.offsetWidth / inEm);
@@ -370,7 +426,7 @@ NotepadController.prototype.resize = function() {
 	if (this.height+plusHeight>parentHeight) {
 		this.height = parentHeight-plusHeight;
 	};
-	this.contentDiv.style.width = ''+this.width+'em';
+	this.cardDiv.style.width = ''+this.width+'em';
 	this.contentDiv.style.height = ''+this.height+'em';
 };
 
@@ -418,19 +474,26 @@ NotepadController.prototype.load = function(item) {
 	}.bind(this))
 };
 
-NotepadController.prototype.showPage = function(index) {
-	if (this.isInEdit()) {
+NotepadController.prototype.showPage = function(index, force) {
+	if (!this.root) {
+		return;
+	};
+	if (this.isInEdit() && !force) {
 		$$.log('Ignoring show - inEdit');
 	};
+	// $$.log('Show page', index, this.pages.length);
 	if (!this.pages || index<0 || index>=this.pages.length) {
 		// Invalid
 		$$.log('Ignoring invalid index/data', index, this.pages);
 		return;
 	};
-	this.app.text(this.contentDiv);
 	this.selectedIndex = index;
-	this.visible = [this.app.renderItem(this.pages[this.selectedIndex], this.contentDiv, {
-
+	for (var i = 0; i < this.visible.length; i++) {
+		this.visible[i]('remove');
+	};
+	this.visible = [this.app.renderItem(this.pages[this.selectedIndex], this.div, {
+		controller: this,
+		index: index
 	})];
 };
 
@@ -485,9 +548,9 @@ var App = function () {
 	// $$.log('App started', this.pxInEm(document.body));
 	this.titleCache = {};
 	this.events = new EventEmitter(this);
-    window.addEventListener('resize', function(e) {//Auto resize
-    	this.resize();
-    }.bind(this));
+	window.addEventListener('resize', function(e) {//Auto resize
+		this.resize();
+	}.bind(this));
 	this.initConnection(function () {
 		this.initUI(function () {
 			this.resize();
@@ -536,29 +599,29 @@ App.prototype.resize = function() {
 };
 
 App.prototype.initConnection = function(handler) {
-    this.dbs = [];
-    this.manager = new SitesManager(function(err) {
-        if (err) {
-            return $$.log('Error:', err);
-            return this.showError(err, true);
-        }
-        var id = this.manager.defaultConnection();
-        $$.log('ID:', id);
-        if(!id) {
-            this.showError('Container not defined', true);
-            return;
-        }
-        this.manager.initConnection(id, function (err, conn) {
-            if (err) {
-                this.showError(err, true);
-                return;
-            };
-            $$.log('Connection is done', err, id, conn);
-            this.initDB(conn, function (err, db) {
-            	handler();
-            }.bind(this));
-        }.bind(this));
-    }.bind(this));	
+	this.dbs = [];
+	this.manager = new SitesManager(function(err) {
+		if (err) {
+			return $$.log('Error:', err);
+			return this.showError(err, true);
+		}
+		var id = this.manager.defaultConnection();
+		$$.log('ID:', id);
+		if(!id) {
+			this.showError('Container not defined', true);
+			return;
+		}
+		this.manager.initConnection(id, function (err, conn) {
+			if (err) {
+				this.showError(err, true);
+				return;
+			};
+			$$.log('Connection is done', err, id, conn);
+			this.initDB(conn, function (err, db) {
+				handler();
+			}.bind(this));
+		}.bind(this));
+	}.bind(this));	
 };
 
 App.prototype.onDocChange = function(type, doc) {
@@ -579,40 +642,40 @@ App.prototype.onPending = function(start) {
 };
 
 App.prototype.initDB = function(conn, handler) {
-    var db = new DocumentsManager(conn, function (err) {
-        if (err) {
-            this.showError(err, true);
-            return;
-        };
-        $$.log('Ready to show UI');
-        db.onDocumentSyncChange = this.onDocChange.bind(this);
-        db.onPending = this.onPending.bind(this);
-        db.autoSyncInterval = 60;
-        this.dbs.push(db);
-        if (handler) {
-            handler(null, db);
-        };
-    }.bind(this), {
-        version: 3,
-        upgrade: function (db, t, version) {
-            switch (version) {
-            case 1:
-                var documents = t.objectStore('documents');
-                documents.createIndex('title', 'title');
-                return;
-            case 2:
-                var documents = t.objectStore('documents');
-                documents.createIndex('tags', 'tags', {multiEntry: true});
-                documents.createIndex('archived', 'archived');
-                documents.createIndex('type', 'type');
-                return;
-            case 3:
-                var documents = t.objectStore('documents');
-                documents.createIndex('parent', 'parent');
-                return;
-            }
-        }.bind(this)
-    });	
+	var db = new DocumentsManager(conn, function (err) {
+		if (err) {
+			this.showError(err, true);
+			return;
+		};
+		$$.log('Ready to show UI');
+		db.onDocumentSyncChange = this.onDocChange.bind(this);
+		db.onPending = this.onPending.bind(this);
+		db.autoSyncInterval = 60;
+		this.dbs.push(db);
+		if (handler) {
+			handler(null, db);
+		};
+	}.bind(this), {
+		version: 3,
+		upgrade: function (db, t, version) {
+			switch (version) {
+			case 1:
+				var documents = t.objectStore('documents');
+				documents.createIndex('title', 'title');
+				return;
+			case 2:
+				var documents = t.objectStore('documents');
+				documents.createIndex('tags', 'tags', {multiEntry: true});
+				documents.createIndex('archived', 'archived');
+				documents.createIndex('type', 'type');
+				return;
+			case 3:
+				var documents = t.objectStore('documents');
+				documents.createIndex('parent', 'parent');
+				return;
+			}
+		}.bind(this)
+	});	
 };
 
 App.prototype.db = function(item) {
@@ -1356,67 +1419,22 @@ App.prototype.gridHandler = function(blocks, grid, div, handler) {
 };
 
 App.prototype.renderItem = function(item, parent, config) {
-	var div = this.el('div', parent, {
-		'class': 'card'
-	});
-	var wrapper = this.el('div', div, {
-		'class': 'card_show'
-	});
-	var titleDiv = this.el('div', wrapper, {
-		'class': 'card_title'
-	});
+	var titleDiv = this.findEl('.card_title_text', parent);
 	this.enableDrag(titleDiv, {'custom/item': item, 'Text': '[['+item.id+']]'});
 	this.enableDrop(titleDiv, {
 		'custom/item': function (other) {
 			// $$.log('Dropped:', other);
-			this.reparent(item, other, function (err) {
-				if (err) {
-					this.showError(err);
-				};
-			}.bind(this));
+			// this.reparent(item, other, function (err) {
+			// 	if (err) {
+			// 		this.showError(err);
+			// 	};
+			// }.bind(this));
 			return false
 		}.bind(this)
 	});
-	var titleTextDiv = this.el('span', titleDiv, {
-		'class': 'card_title_text'
-	});
-	var bodyDiv = this.el('div', wrapper, {
-		'class': 'card_body'
-	});
-	if (item.id == config.selected) {
-		// Render selected item
-		var floatPanel = this.el('div', wrapper, {
-			'class': 'card_float_panel'
-		});
-		if (config.edit) {
-			var editButton = this.el('button', floatPanel, {
-				'class': 'item_button'
-			}, 'Edit');
-			editButton.addEventListener('click', function (evt) {
-				if (!isInEdit()) {
-					edit();
-				};
-			}.bind(this));
-			var addButton = this.el('button', floatPanel, {
-				'class': 'item_button'
-			}, 'Add');
-			addButton.addEventListener('click', function (evt) {
-				this.createNewItem(item);
-			}.bind(this));
-			var remove = this.el('button', floatPanel, {
-				'class': 'item_button'
-			}, 'Remove');
-			remove.addEventListener('click', function (evt) {
-				onRemove();
-			});
-		};
-	};
-	var bodyContentsDiv = this.el('div', bodyDiv, {
-		'class': 'card_body_contents'
-	});
-	var bottomDiv = this.el('div', wrapper, {
-		'class': 'card_bottom'
-	});
+	var bodyDiv = this.findEl('.card_body_contents', parent);
+	this.text(bodyDiv);
+	var bottomDiv = this.findEl('.card_tags', parent);
 	this.enableDrop(bottomDiv, {
 		'custom/item': function (other) {
 			// Dropped tag
@@ -1432,9 +1450,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			return false;
 		}.bind(this)
 	});
-	var tagsDiv = this.el('div', bottomDiv, {
-		'class': 'card_tags'
-	});
+	this.text(bottomDiv);
 	var inEdit = false;
 	var editHandlers = [];
 	var isInEdit = function () {
@@ -1477,12 +1493,12 @@ App.prototype.renderItem = function(item, parent, config) {
 			};
 			return grid;
 		};
-		this.text(titleTextDiv, item.title || '<No title>', true);
+		this.text(titleDiv, item.title || '<No title>', true);
 		var tags = item.tags || [];
-		this.text(tagsDiv);
+		this.text(bottomDiv);
 		for (var i = 0; i < tags.length; i++) {
 			var tag = tags[i];
-			this.renderLink(tagsDiv, tag, {
+			this.renderLink(bottomDiv, tag, {
 			});
 		};
 		this.parseLines(item.body, function (blocks) {
@@ -1502,116 +1518,62 @@ App.prototype.renderItem = function(item, parent, config) {
 					}.bind(this));
 				}.bind(this);
 				// $$.log('Render', item.title, editHandlers.length, configs.length);
-				this.text(bodyContentsDiv);
+				this.text(bodyDiv);
 				editHandlers = [];
 				for (var i = 0; i < configs.length; i++) {
 					var conf = configs[i];
-					var cb = this.execApp('onRender', conf, item, bodyContentsDiv, blocks, _gridHandler);
+					var cb = this.execApp('onRender', conf, item, bodyDiv, blocks, _gridHandler);
 					if (cb) {
 						editHandlers.push(cb);
 					};
 				};
 				if (editHandlers.length == 0) {
 					var grid = blocksToGrid(blocks);
-					var editHandler = this.gridHandler(blocks, grid, bodyContentsDiv, _gridHandler);
+					var editHandler = this.gridHandler(blocks, grid, bodyDiv, _gridHandler);
 					editHandlers.push(editHandler);
 				};
 			}.bind(this));
 		}.bind(this));
 	}.bind(this);
 	render('Item render');
+	var etitle = this.findEl('.editor_title', parent);
+	var ebody = this.findEl('.editor_body', parent);
+	var etags = this.findEl('.editor_tags', parent);
+	var onFinishEdit = function () {
+		finishEdit();
+	}.bind(this);
+	var finishEdit = function () {
+		inEdit = false;
+		parent.classList.remove('card_edit');
+	}.bind(this);
+	var onSave = function () {
+		item.title = etitle.value.trim();
+		item.body = ebody.value;
+		var tags = etags.value.trim();
+		if (tags) {
+			item.tags = tags.split(' ');
+		} else {
+			delete item.tags;
+		}
+		item.updated = new Date().getTime();
+		this.updateItem(item, function () {
+			finishEdit();
+			render('Saved');
+		});
+	}.bind(this);
 	var edit = function () {
 		inEdit = true;
-		wrapper.style.display = 'none';
-		var ewrapper = this.el('div', div, {
-			'class': 'card_edit'
-		});
-		var ebuttons = this.el('div', ewrapper, {
-			'class': 'card_edit_buttons'
-		});
-		var etitle = this.el('input', ewrapper, {
-			'type': 'text',
-			'class': 'item_edit_text card_title_text',
-			'value': item.title || '' 
-		});
-		var ebody = this.el('textarea', ewrapper, {
-			'class': 'item_edit_area'
-		});
-        ebody.focus();
+		parent.classList.add('card_edit');
+		ebody.focus();
 		ebody.value = item.body || '';
-		var etags = this.el('input', ewrapper, {
-			'type': 'text',
-			'class': 'item_edit_text',
-			'value': item.tags? item.tags.join(' '): ''
-		});
-		var save = this.el('button', ebuttons, {
-			'class': 'item_button'
-		}, 'Save');
-		save.addEventListener('click', function (evt) {
-			onSave();
-		});
-		var cancel = this.el('button', ebuttons, {
-			'class': 'item_button'
-		}, 'Cancel');
-		var onKeyPress = function (evt) {
-			if (evt.ctrlKey && evt.keyCode == 13) {
-				// Save
-				onSave();
-				return false;
-			};
-			if (evt.keyCode == 27) {
-				// Esc
-				onFinishEdit();
-				return false;
-			};
-		}.bind(this);
-		etitle.addEventListener('keydown', onKeyPress);
-		etags.addEventListener('keydown', onKeyPress);
-		ebody.addEventListener('keydown', onKeyPress);
-		var onFinishEdit = function () {
-			inEdit = false;
-			div.removeChild(ewrapper);
-			wrapper.style.display = 'block';
-		}.bind(this);
-		var onRemove = function () {
-			if (window.confirm('Are you sure want to remove item and it\'s children?')) {
-				this.itemRecursive(item, function (item, db, cb) {
-					// Remove
-					db.remove(item, function (err) {
-						if (err) {
-							return cb(err);
-						};
-						this.events.emit('remove', {
-							item: item
-						});
-						cb(null);
-					}.bind(this));
-				}.bind(this), function (err) {
-					if (err) {
-						this.showError(err);
-					};
-					this.selectItem(this.selected);
-				}.bind(this))
-			};
-		}.bind(this);
-		var onSave = function () {
-			item.title = etitle.value.trim();
-			item.body = ebody.value;
-			var tags = etags.value.trim();
-			if (tags) {
-				item.tags = tags.split(' ');
-			} else {
-				delete item.tags;
-			}
-			item.updated = new Date().getTime();
-			this.updateItem(item, function () {
-				render('Saved');
-				onFinishEdit();
-			});
-		}.bind(this);
-		cancel.addEventListener('click', function (evt) {
-			onFinishEdit();
-		}.bind(this));
+		etitle.value = item.title || '';
+		etags.value = item.tags? item.tags.join(' '): '';
+		// var save = this.el('button', ebuttons, {
+		// 	'class': 'item_button'
+		// }, 'Save');
+		// save.addEventListener('click', function (evt) {
+		// 	onSave();
+		// });
 	}.bind(this);
 	var onUpdate = function (evt) {
 		if (evt.item && evt.item.id == item.id) {
@@ -1619,6 +1581,14 @@ App.prototype.renderItem = function(item, parent, config) {
 			if (!isInEdit()) {
 				render('Update event');
 			};
+		};
+	}.bind(this);
+	var onRemove = function (evt) {
+		if (evt.item.id == item.id) {
+			config.controller.events.emit('remove', {
+				item: item,
+				index: config.index
+			});
 		};
 	}.bind(this);
 	var onFocus = function (focus, data) {
@@ -1630,6 +1600,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		}
 	}.bind(this);
 	this.events.on('update', onUpdate);
+	this.events.on('remove', onRemove);
 	return function (type, arg0, arg1, arg2) {
 		if ('div' == type) {
 			return div;
@@ -1637,6 +1608,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		if ('remove' == type) {
 			// Unsubscribe
 			this.events.off('update', onUpdate);
+			this.events.off('remove', onRemove);
 		};
 		if ('locked' == type) {
 			return isInEdit();
@@ -1646,6 +1618,16 @@ App.prototype.renderItem = function(item, parent, config) {
 		};
 		if ('edit' == type) {
 			return edit();
+		};
+		if ('cancel' == type) {
+			return onFinishEdit();
+		};
+		if ('save' == type) {
+			if (isInEdit) {
+				// Editor active
+				return onSave();
+			};
+			return false;
 		};
 		if ('child' == type) {
 			return this.createNewItem(item);
@@ -1687,34 +1669,34 @@ App.prototype.text = function(el, text, softspace) {
 };
 
 App.prototype.el = function(name, parent, attr, text) {
-    var el = document.createElement(name);
-    if (parent) { // Have parent
-        parent.appendChild(el);
-    };
-    if (attr) {
-        for (var id in attr) {
-            var value = attr[id];
-            if (value && typeof(value) == 'string') {
-                el.setAttribute(id, value);
-            };
-        };
-    }
-    if (text) {
-        // Add text content
-        el.appendChild(document.createTextNode(text));
-    }
-    return el;
+	var el = document.createElement(name);
+	if (parent) { // Have parent
+		parent.appendChild(el);
+	};
+	if (attr) {
+		for (var id in attr) {
+			var value = attr[id];
+			if (value && typeof(value) == 'string') {
+				el.setAttribute(id, value);
+			};
+		};
+	}
+	if (text) {
+		// Add text content
+		el.appendChild(document.createTextNode(text));
+	}
+	return el;
 }
 
 App.prototype.scrollToEl = function (el, parent) {
-    if (!el) {
-        return;
-    };
-    var p = parent || window;
-    var sto = el.offsetTop-10;
-    setTimeout(function () {
-    	p.scrollTo(p.scrollX, sto);
-    }.bind(this), 10);
+	if (!el) {
+		return;
+	};
+	var p = parent || window;
+	var sto = el.offsetTop-10;
+	setTimeout(function () {
+		p.scrollTo(p.scrollX, sto);
+	}.bind(this), 10);
 };
 
 App.prototype.isAppDev = function(item) {
@@ -1728,20 +1710,20 @@ App.prototype.addDevAppButton = function(item, blocks) {
 	button.addEventListener('click', function (evt) {
 		iterateOver(blocks, function (block, cb) {
 			if (block.type == 'block' && (block.params[0] == 'js' || block.params[0] == 'css') && block.params[1]) {
-			    var req = new XMLHttpRequest();
-			    req.onreadystatechange = function(e) {
-			        if (req.readyState == 4) {
-			            if (200 != req.status) {
-			                cb('XHR error');
-			            } else {
-			            	block.lines = req.responseText.split('\n');
-			            	cb();
-			            	$$.log('Resource loaded:', block.params[1]);
-			            }
-			        };
-			    };
-			    req.open('GET', 'js/apps/'+item.title.toLowerCase()+'/'+block.params[1]);
-			    req.send();
+				var req = new XMLHttpRequest();
+				req.onreadystatechange = function(e) {
+					if (req.readyState == 4) {
+						if (200 != req.status) {
+							cb('XHR error');
+						} else {
+							block.lines = req.responseText.split('\n');
+							cb();
+							$$.log('Resource loaded:', block.params[1]);
+						}
+					};
+				};
+				req.open('GET', 'js/apps/'+item.title.toLowerCase()+'/'+block.params[1]);
+				req.send();
 			} else {
 				cb();
 			}
@@ -1761,8 +1743,8 @@ App.prototype.addDevAppButton = function(item, blocks) {
 };
 
 App.prototype.loadApplications = function() {
-    var head = document.getElementsByTagName('head')[0];
-    this.initAppAPI();
+	var head = document.getElementsByTagName('head')[0];
+	this.initAppAPI();
 	var getBlockText = function (block) {
 		var result = '\n';
 		for (var i = 0; i < block.lines.length; i++) {
@@ -1793,7 +1775,7 @@ App.prototype.loadApplications = function() {
 					head.appendChild(el);
 				};
 				if (block.type == 'block' && block.params[0] == 'css') {
-            		var el;
+					var el;
 					if (this.isAppDev(item) && block.params[1]) {
 						// Use src
 						el = document.createElement('link');

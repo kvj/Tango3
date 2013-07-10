@@ -28,11 +28,10 @@ body {
 }
 
 .left_item {
-	margin: 0.2em;
 	border: 1px solid #aaaaaa;
-	padding: 0.2em;
 	cursor: pointer;
 	font-family: sans-serif;
+	margin: 0.1em;
 }
 
 .panel_content {
@@ -178,11 +177,8 @@ body {
 
 .card {
 	border: 1px solid #aaaaaa;
-	font-family: sans-serif;
-	box-sizing: border-box;
 	background-color: #ffffff;
 	box-shadow: 1px 1px 1px #888888;
-	min-height: 100%;
 }
 
 .card_focus {
@@ -206,7 +202,6 @@ body {
 }
 
 .card_title {
-	padding: 0.2em;
 	background-color: #dddddd;
 	cursor: pointer;
 }
@@ -214,6 +209,7 @@ body {
 .card_title_text {
 	font-weight: bold;
 	font-size: 1em;
+	padding: 0 0.3em;
 }
 
 .card_body {
@@ -226,13 +222,14 @@ body {
 }
 
 .card_bottom {
-	min-height: 2em;
 	background-color: #eeeeee;
 	padding: 0.1em;
 }
 
 .card_tags {
 	font-size: 0.8em;
+	line-height: 1.2em;
+	vertical-align: middle;
 }
 
 .card_float_panel {
@@ -243,9 +240,17 @@ body {
 	right: 0;
 }
 
-.card_edit {
-	padding: 0.4em;
-	padding-right: 0.8em;
+.card_editor {
+	font-family: sans-serif;
+	font-size: 0.8em;
+	left: 0.2em;
+	top: 0.2em;
+	right: 0.2em;
+	bottom: 0.2em;
+	position: absolute;
+	background-color: transparent;
+	border: 1px solid #aaaaaa;
+	padding: 0 0.2em;
 }
 
 .item_edit_text {
@@ -256,13 +261,20 @@ body {
 	font-size: 0.8em;
 }
 
-.item_edit_area {
-	margin: 0;
+.card_editor_area {
 	padding: 0.2em;
-	width: 100%;
-	font-family: sans-serif;
-	font-size: 0.8em;
-	margin-top: 0.5em;
+}
+
+.card_in_edit {
+	display: none;
+}
+
+.card_edit .card_in_edit {
+	display: inline;
+}
+
+.card_edit .card_no_edit {
+	display: none;
 }
 
 .card_edit_buttons {
@@ -433,17 +445,27 @@ body {
 
 .controller_root {
 	display: inline-block;
+	font-family: sans-serif;
+}
+
+.one_line {
+	height: 2em;
+	line-height: 2em;
+	vertical-align: middle;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	text-align: left;
+	position: relative;
 }
 
 .controller_panel {
 	text-align: right;
-	height: 2em;
-	line-height: 2em;
 }
 
 .controller_content {
 	padding: 0.2em;
 	text-align: left;
+	position: relative;
 }
 
 ::-webkit-scrollbar {
