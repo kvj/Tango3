@@ -1,0 +1,185 @@
+@font-face {
+	font-family: 'Tango4-System';
+	src:url('fonts/Tango4-System.woff') format('woff'), url('fonts/Tango4-System.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+/* Use the following CSS code if you want to use data attributes for inserting your icons */
+[data-icon]:before {
+	font-family: 'Tango4-System';
+	content: attr(data-icon);
+	speak: none;
+	font-weight: normal;
+	font-variant: normal;
+	text-transform: none;
+	line-height: 1;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Use the following CSS code if you want to have a class per icon */
+/*
+Instead of a list of all class selectors,
+you can use the generic selector below, but it's slower:
+[class*="ic-system"] {
+*/
+.ic-systemhome, .ic-systempencil, .ic-systemconnection, .ic-systembook, .ic-systembooks, .ic-systemfile, .ic-systemfile-2, .ic-systemfolder-open, .ic-systemtag, .ic-systemlocation, .ic-systempushpin, .ic-systemclock, .ic-systemcalendar, .ic-systembox-add, .ic-systemdownload, .ic-systemdisk, .ic-systemundo, .ic-systemredo, .ic-systemuser, .ic-systemspinner, .ic-systemsearch, .ic-systemlock, .ic-systemequalizer, .ic-systemcog, .ic-systemremove, .ic-systemremove-2, .ic-systemcloud, .ic-systemearth, .ic-systemflag, .ic-systemattachment, .ic-systembookmark, .ic-systemheart, .ic-systemstar, .ic-systemstar-2, .ic-systemheart-2, .ic-systemwarning, .ic-systeminfo, .ic-systemquestion, .ic-systemcancel-circle, .ic-systemcheckmark-circle, .ic-systemexit, .ic-systemloop, .ic-systemcheckbox-checked, .ic-systemcheckbox-unchecked, .ic-systemcheckbox-partial, .ic-systemradio-checked, .ic-systemradio-unchecked, .ic-systemcopy, .ic-systemcopy-2, .ic-systemplus {
+	font-family: 'Tango4-System';
+	speak: none;
+	font-style: normal;
+	font-weight: normal;
+	font-variant: normal;
+	text-transform: none;
+	line-height: 1;
+	-webkit-font-smoothing: antialiased;
+}
+.ic-systemhome:before {
+	content: "\21";
+}
+.ic-systempencil:before {
+	content: "\22";
+}
+.ic-systemconnection:before {
+	content: "\23";
+}
+.ic-systembook:before {
+	content: "\24";
+}
+.ic-systembooks:before {
+	content: "\25";
+}
+.ic-systemfile:before {
+	content: "\26";
+}
+.ic-systemfile-2:before {
+	content: "\27";
+}
+.ic-systemfolder-open:before {
+	content: "\28";
+}
+.ic-systemtag:before {
+	content: "\29";
+}
+.ic-systemlocation:before {
+	content: "\2a";
+}
+.ic-systempushpin:before {
+	content: "\2b";
+}
+.ic-systemclock:before {
+	content: "\2c";
+}
+.ic-systemcalendar:before {
+	content: "\2d";
+}
+.ic-systembox-add:before {
+	content: "\2e";
+}
+.ic-systemdownload:before {
+	content: "\2f";
+}
+.ic-systemdisk:before {
+	content: "\30";
+}
+.ic-systemundo:before {
+	content: "\31";
+}
+.ic-systemredo:before {
+	content: "\32";
+}
+.ic-systemuser:before {
+	content: "\33";
+}
+.ic-systemspinner:before {
+	content: "\34";
+}
+.ic-systemsearch:before {
+	content: "\35";
+}
+.ic-systemlock:before {
+	content: "\36";
+}
+.ic-systemequalizer:before {
+	content: "\37";
+}
+.ic-systemcog:before {
+	content: "\38";
+}
+.ic-systemremove:before {
+	content: "\39";
+}
+.ic-systemremove-2:before {
+	content: "\3a";
+}
+.ic-systemcloud:before {
+	content: "\3b";
+}
+.ic-systemearth:before {
+	content: "\3c";
+}
+.ic-systemflag:before {
+	content: "\3d";
+}
+.ic-systemattachment:before {
+	content: "\3e";
+}
+.ic-systembookmark:before {
+	content: "\3f";
+}
+.ic-systemheart:before {
+	content: "\40";
+}
+.ic-systemstar:before {
+	content: "\41";
+}
+.ic-systemstar-2:before {
+	content: "\42";
+}
+.ic-systemheart-2:before {
+	content: "\43";
+}
+.ic-systemwarning:before {
+	content: "\44";
+}
+.ic-systeminfo:before {
+	content: "\45";
+}
+.ic-systemquestion:before {
+	content: "\46";
+}
+.ic-systemcancel-circle:before {
+	content: "\47";
+}
+.ic-systemcheckmark-circle:before {
+	content: "\48";
+}
+.ic-systemexit:before {
+	content: "\49";
+}
+.ic-systemloop:before {
+	content: "\4a";
+}
+.ic-systemcheckbox-checked:before {
+	content: "\4b";
+}
+.ic-systemcheckbox-unchecked:before {
+	content: "\4c";
+}
+.ic-systemcheckbox-partial:before {
+	content: "\4d";
+}
+.ic-systemradio-checked:before {
+	content: "\4e";
+}
+.ic-systemradio-unchecked:before {
+	content: "\4f";
+}
+.ic-systemcopy:before {
+	content: "\50";
+}
+.ic-systemcopy-2:before {
+	content: "\51";
+}
+.ic-systemplus:before {
+	content: "\52";
+}
