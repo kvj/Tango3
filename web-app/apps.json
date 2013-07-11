@@ -14,14 +14,17 @@
 		"network": ["*"]
 	},
 	"note": {
-		"version": 1307101918,
+		"version": 1307111400,
 		"index": "index.tmpl.html",
 		"main": "tango42.tmpl.html",
 		"cache": [
 			"js/common.js",
 			"js/tango42.css",
 			"js/tango2.js",
-			"js/tango42.js"
+			"js/tango42.js",
+			"css/font/style.css",
+			"css/font/Tango4-System.ttf",
+			"css/font/Tango4-System.woff"
 		],
 		"network": ["*"]
 	}

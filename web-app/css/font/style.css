@@ -1,29 +1,12 @@
 @font-face {
 	font-family: 'Tango4-System';
-	src:url('fonts/Tango4-System.woff') format('woff'), url('fonts/Tango4-System.ttf') format('truetype');
+	src:url('Tango4-System.woff') format('woff'), url('Tango4-System.ttf') format('truetype');
 	font-weight: normal;
 	font-style: normal;
 }
 
-/* Use the following CSS code if you want to use data attributes for inserting your icons */
-[data-icon]:before {
-	font-family: 'Tango4-System';
-	content: attr(data-icon);
-	speak: none;
-	font-weight: normal;
-	font-variant: normal;
-	text-transform: none;
-	line-height: 1;
-	-webkit-font-smoothing: antialiased;
-}
-
-/* Use the following CSS code if you want to have a class per icon */
-/*
-Instead of a list of all class selectors,
-you can use the generic selector below, but it's slower:
-[class*="ic-system"] {
-*/
-.ic-systemhome, .ic-systempencil, .ic-systemconnection, .ic-systembook, .ic-systembooks, .ic-systemfile, .ic-systemfile-2, .ic-systemfolder-open, .ic-systemtag, .ic-systemlocation, .ic-systempushpin, .ic-systemclock, .ic-systemcalendar, .ic-systembox-add, .ic-systemdownload, .ic-systemdisk, .ic-systemundo, .ic-systemredo, .ic-systemuser, .ic-systemspinner, .ic-systemsearch, .ic-systemlock, .ic-systemequalizer, .ic-systemcog, .ic-systemremove, .ic-systemremove-2, .ic-systemcloud, .ic-systemearth, .ic-systemflag, .ic-systemattachment, .ic-systembookmark, .ic-systemheart, .ic-systemstar, .ic-systemstar-2, .ic-systemheart-2, .ic-systemwarning, .ic-systeminfo, .ic-systemquestion, .ic-systemcancel-circle, .ic-systemcheckmark-circle, .ic-systemexit, .ic-systemloop, .ic-systemcheckbox-checked, .ic-systemcheckbox-unchecked, .ic-systemcheckbox-partial, .ic-systemradio-checked, .ic-systemradio-unchecked, .ic-systemcopy, .ic-systemcopy-2, .ic-systemplus {
+.font_icon {
+	vertical-align: text-bottom;
 	font-family: 'Tango4-System';
 	speak: none;
 	font-style: normal;
@@ -36,10 +19,10 @@ you can use the generic selector below, but it's slower:
 .ic-systemhome:before {
 	content: "\21";
 }
-.ic-systempencil:before {
+.ic-systemedit:before {
 	content: "\22";
 }
-.ic-systemconnection:before {
+.ic-systemnetwork:before {
 	content: "\23";
 }
 .ic-systembook:before {
@@ -48,13 +31,13 @@ you can use the generic selector below, but it's slower:
 .ic-systembooks:before {
 	content: "\25";
 }
-.ic-systemfile:before {
+.ic-systemdocument:before {
 	content: "\26";
 }
-.ic-systemfile-2:before {
+.ic-systemempty1:before {
 	content: "\27";
 }
-.ic-systemfolder-open:before {
+.ic-systemfolder:before {
 	content: "\28";
 }
 .ic-systemtag:before {
@@ -63,7 +46,7 @@ you can use the generic selector below, but it's slower:
 .ic-systemlocation:before {
 	content: "\2a";
 }
-.ic-systempushpin:before {
+.ic-systempin:before {
 	content: "\2b";
 }
 .ic-systemclock:before {
@@ -72,13 +55,13 @@ you can use the generic selector below, but it's slower:
 .ic-systemcalendar:before {
 	content: "\2d";
 }
-.ic-systembox-add:before {
+.ic-systeminbox:before {
 	content: "\2e";
 }
-.ic-systemdownload:before {
+.ic-systemput:before {
 	content: "\2f";
 }
-.ic-systemdisk:before {
+.ic-systemsave:before {
 	content: "\30";
 }
 .ic-systemundo:before {
@@ -87,10 +70,10 @@ you can use the generic selector below, but it's slower:
 .ic-systemredo:before {
 	content: "\32";
 }
-.ic-systemuser:before {
+.ic-systemcontact:before {
 	content: "\33";
 }
-.ic-systemspinner:before {
+.ic-systemrefresh:before {
 	content: "\34";
 }
 .ic-systemsearch:before {
@@ -99,16 +82,16 @@ you can use the generic selector below, but it's slower:
 .ic-systemlock:before {
 	content: "\36";
 }
-.ic-systemequalizer:before {
+.ic-systemconfig:before {
 	content: "\37";
 }
-.ic-systemcog:before {
+.ic-systemsettings:before {
 	content: "\38";
 }
-.ic-systemremove:before {
+.ic-systemtrash1:before {
 	content: "\39";
 }
-.ic-systemremove-2:before {
+.ic-systemtrash2:before {
 	content: "\3a";
 }
 .ic-systemcloud:before {
@@ -126,16 +109,16 @@ you can use the generic selector below, but it's slower:
 .ic-systembookmark:before {
 	content: "\3f";
 }
-.ic-systemheart:before {
+.ic-systemheart1:before {
 	content: "\40";
 }
-.ic-systemstar:before {
+.ic-systemstar1:before {
 	content: "\41";
 }
-.ic-systemstar-2:before {
+.ic-systemstar2:before {
 	content: "\42";
 }
-.ic-systemheart-2:before {
+.ic-systemheart2:before {
 	content: "\43";
 }
 .ic-systemwarning:before {
@@ -147,39 +130,148 @@ you can use the generic selector below, but it's slower:
 .ic-systemquestion:before {
 	content: "\46";
 }
-.ic-systemcancel-circle:before {
+.ic-systemerror:before {
 	content: "\47";
 }
-.ic-systemcheckmark-circle:before {
+.ic-systemsuccess:before {
 	content: "\48";
 }
 .ic-systemexit:before {
 	content: "\49";
 }
-.ic-systemloop:before {
+.ic-systemreload:before {
 	content: "\4a";
 }
-.ic-systemcheckbox-checked:before {
+.ic-systemcheck1:before {
 	content: "\4b";
 }
-.ic-systemcheckbox-unchecked:before {
+.ic-systemcheck2:before {
 	content: "\4c";
 }
-.ic-systemcheckbox-partial:before {
+.ic-systemcheck3:before {
 	content: "\4d";
 }
-.ic-systemradio-checked:before {
+.ic-systemcircle1:before {
 	content: "\4e";
 }
-.ic-systemradio-unchecked:before {
+.ic-systemcircle2:before {
 	content: "\4f";
 }
 .ic-systemcopy:before {
 	content: "\50";
 }
-.ic-systemcopy-2:before {
+.ic-systempaste:before {
 	content: "\51";
 }
 .ic-systemplus:before {
 	content: "\52";
+}
+
+.ic-systemimage:before {
+	content: "\53";
+}
+.ic-systemempty2:before {
+	content: "\54";
+}
+.ic-systemmap:before {
+	content: "\55";
+}
+.ic-systemalarm:before {
+	content: "\56";
+}
+.ic-systemprint:before {
+	content: "\57";
+}
+.ic-systemoutbox:before {
+	content: "\58";
+}
+.ic-systemarchive:before {
+	content: "\59";
+}
+.ic-systemunlock:before {
+	content: "\5a";
+}
+.ic-systemwand:before {
+	content: "\5b";
+}
+.ic-systemdashboard:before {
+	content: "\5c";
+}
+.ic-systemlightning:before {
+	content: "\5d";
+}
+.ic-systempowercord:before {
+	content: "\5e";
+}
+.ic-systemlink:before {
+	content: "\5f";
+}
+.ic-systemthumbup:before {
+	content: "\60";
+}
+.ic-systemthumbdown:before {
+	content: "\61";
+}
+.ic-systemfailure:before {
+	content: "\62";
+}
+.ic-systemminus:before {
+	content: "\63";
+}
+.ic-systemarrowupleft:before {
+	content: "\64";
+}
+.ic-systemarrowup:before {
+	content: "\65";
+}
+.ic-systemarrowupright:before {
+	content: "\66";
+}
+.ic-systemarrowright:before {
+	content: "\67";
+}
+.ic-systemarrowdownright:before {
+	content: "\68";
+}
+.ic-systemarrowdown:before {
+	content: "\69";
+}
+.ic-systemarrowdownleft:before {
+	content: "\6a";
+}
+.ic-systemarrowleft:before {
+	content: "\6b";
+}
+.ic-systemcut:before {
+	content: "\6c";
+}
+.ic-systemfilter:before {
+	content: "\6d";
+}
+.ic-systemtable:before {
+	content: "\6e";
+}
+.ic-systemshare:before {
+	content: "\6f";
+}
+.ic-systemclose:before {
+	content: "\70";
+}
+.ic-systemcheckmark1:before {
+	content: "\71";
+}
+.ic-systemcheckmark2:before {
+	content: "\72";
+}
+.ic-systemarrowcircleup:before {
+	content: "\73";
+}
+.ic-systemarrowcircledown:before {
+	content: "\74";
+}
+.ic-systemarrowcircleleft:before {
+	content: "\75";
+}
+.ic-systemarrowcircleright:before {
+	content: "\76";
 }

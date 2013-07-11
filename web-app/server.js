@@ -44,6 +44,7 @@ App.prototype.initRest = function() {
 	this.app.use(express.json());
 	this.app.use('/js', express.static(__dirname + '/js'));
 	this.app.use('/lib', express.static(__dirname + '/lib'));
+	this.app.use('/css', express.static(__dirname + '/css'));
 	this.app.use('/dev', express.static(__dirname + '/dev'));
 	this.app.use(cors({
 		origin: true

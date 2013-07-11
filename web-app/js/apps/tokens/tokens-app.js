@@ -37,12 +37,12 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 							align: 'r',
 							text: new Date(itm.accessed).format('m/d H:MM')
 						}, {
-							text: 'Approve',
+							icon: 'success',
 							token: itm.token,
 							approveToken: true,
 							button: true
 						}, {
-							text: 'Remove',
+							icon: 'trash1',
 							token: itm.token,
 							removeToken: true,
 							button: true
@@ -68,12 +68,12 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 							align: 'r',
 							text: new Date(itm.accessed).format('m/d H:MM')
 						}, {
-							text: 'Disable',
+							icon: 'error',
 							token: itm.token,
 							disableToken: true,
 							button: true
 						}, {
-							text: 'Remove',
+							icon: 'trash1',
 							token: itm.token,
 							removeToken: true,
 							button: true

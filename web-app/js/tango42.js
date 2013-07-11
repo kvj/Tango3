@@ -16,7 +16,7 @@ if (typeof String.prototype.endsWith != 'function') {
 var dateFormat = function () {
 	var token = /d{1,4}|m{1,4}|w{1,2}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
 		timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
-		timezoneClip = /[^-+\dA-Z]/g,
+		timezoneClip = /[^-+&#xdA;-Z]/g,
 		pad = function (val, len) {
 			val = String(val);
 			len = len || 2;
@@ -115,14 +115,16 @@ var NotepadPanel = function (app) {
 	this.div = app.findEl('#left_pane');
 	var topButton = app.el('button', app.findEl('#top_controls'), {
 		'class': 'item_button'
-	}, 'Notepads');
+	});
+	app.icon('books', topButton);
 	this.visible = true;
 	topButton.addEventListener('click', function (evt) {
 		this.toggleVisible();
 	}.bind(this));
 	var button = app.el('button', app.findEl('#top_left_controls'), {
 		'class': 'item_button'
-	}, 'New');
+	});
+	app.icon('plus', button);
 	button.addEventListener('click', function (evt) {
 		app.createNewItem(null, null, 'notepad');
 	}.bind(this));
@@ -134,7 +136,7 @@ var NotepadPanel = function (app) {
 		};
 	}.bind(this));
 	app.events.on(['add', 'update', 'remove'], function (evt) {
-		$$.log('change', evt.type, evt.item);
+		// $$.log('change', evt.type, evt.item);
 		if (evt.item.parent == 'root') {
 			this.refresh();
 		};
@@ -153,6 +155,7 @@ NotepadPanel.prototype.toggleVisible = function() {
 	if (this.visible) {
 		// From hidden to visible
 		document.body.classList.remove('left_hidden');
+		this.refresh();
 	} else {
 		document.body.classList.add('left_hidden');
 	}
@@ -239,38 +242,43 @@ var NotepadController = function (app, parent) {
 
 NotepadController.prototype.buildUI = function(first_argument) {
 	this.div = this.app.el('div', this.parent, {
-		'class': 'controller_root'
+		'class': 'controller_root controller_hidden'
 	});
 	var topButtons = this.app.el('div', this.div, {
 		'class': 'controller_panel one_line'
 	});
 	var button = this.app.el('button', topButtons, {
 		'class': 'item_button card_no_edit'
-	}, 'Edit');
+	});
+	this.app.icon('edit', button);
 	button.addEventListener('click', function (evt) {
 		this.editItem();
 	}.bind(this));
 	button = this.app.el('button', topButtons, {
 		'class': 'item_button card_in_edit'
-	}, 'Save');
+	});
+	this.app.icon('checkmark1', button);
 	button.addEventListener('click', function (evt) {
 		this.sendMessage('save');
 	}.bind(this));
 	button = this.app.el('button', topButtons, {
 		'class': 'item_button card_in_edit'
-	}, 'Cancel');
+	});
+	this.app.icon('close', button);
 	button.addEventListener('click', function (evt) {
 		this.sendMessage('cancel');
 	}.bind(this));
 	button = this.app.el('button', topButtons, {
 		'class': 'item_button'
-	}, 'Add');
+	});
+	this.app.icon('plus', button);
 	button.addEventListener('click', function (evt) {
 		this.createNewItem();
 	}.bind(this));
 	button = this.app.el('button', topButtons, {
 		'class': 'item_button'
-	}, 'Remove');
+	});
+	this.app.icon('trash1', button);
 	button.addEventListener('click', function (evt) {
 		this.removeItem();
 	}.bind(this));
@@ -312,13 +320,15 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	});
 	button = this.app.el('button', bottomButtons, {
 		'class': 'item_button'
-	}, 'Left');
+	});
+	this.app.icon('arrowleft', button);
 	button.addEventListener('click', function (evt) {
 		this.raisePage(-1);
 	}.bind(this));
 	button = this.app.el('button', bottomButtons, {
 		'class': 'item_button'
-	}, 'Right');
+	});
+	this.app.icon('arrowright', button);
 	button.addEventListener('click', function (evt) {
 		this.raisePage(1);
 	}.bind(this));
@@ -433,6 +443,7 @@ NotepadController.prototype.resize = function() {
 NotepadController.prototype.load = function(item) {
 	// Called when it's time to load page
 	$$.log('Loading:', item);
+	this.div.classList.remove('controller_hidden');
 	if (this.isInEdit()) {
 		return false;
 	};
@@ -741,7 +752,7 @@ App.prototype.refreshSyncControls = function() {
 		}, this.manager, function () {
 		}.bind(this));
 		var button = this.el('button', wrapper, {
-			'class': 'item_button'
+			'class': 'item_button item_button_text'
 		}, db.conn.code);
 		var doSync = function () {
 			button.disabled = true;
@@ -1112,7 +1123,8 @@ App.prototype.renderText = function(text, div, handler) {
 	if (!parsed) {
 		// Just plain text
 		var span = this.el('span', div, {
-		}, text);
+		});
+		this.text(span, text);
 	};
 };
 
@@ -1140,7 +1152,13 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (col.button) {
 			var button = this.el('button', wrapper, {
 				'class': 'item_button item_td_button'
-			}, col.text);
+			});
+			if (col.icon) {
+				this.icon(col.icon, button)
+			} else {
+				button.classList.add('item_button_text');
+				this.text(button, col.text);
+			}
 			button.addEventListener('click', function (evt) {
 				handler({type: 'button'}, col);
 			}.bind(this));
@@ -1208,7 +1226,8 @@ App.prototype.renderGrid = function(config, div, handler) {
 			// Can edit with simple one-line text box
 			var addButton = this.el('button', floatPanel, {
 				'class': 'item_button'
-			}, 'Add');
+			});
+			this.icon('plus', addButton);
 			addButton.addEventListener('click', function (evt) {
 				renderEditor('add');
 				evt.stopPropagation();
@@ -1225,7 +1244,8 @@ App.prototype.renderGrid = function(config, div, handler) {
 			// Can edit with simple one-line text box
 			var editButton = this.el('button', floatPanel, {
 				'class': 'item_button'
-			}, 'Edit');
+			});
+			this.icon('edit', editButton);
 			editButton.addEventListener('click', function (evt) {
 				renderEditor('edit');
 				evt.stopPropagation();
@@ -1248,7 +1268,8 @@ App.prototype.renderGrid = function(config, div, handler) {
 			// Can edit with simple one-line text box
 			var removeButton = this.el('button', floatPanel, {
 				'class': 'item_button'
-			}, 'Remove');
+			});
+			this.icon('trash1', removeButton);
 			removeButton.addEventListener('click', function (evt) {
 				handler({type: 'remove'}, col);
 				evt.stopPropagation();
@@ -1699,13 +1720,19 @@ App.prototype.scrollToEl = function (el, parent) {
 	}.bind(this), 10);
 };
 
+App.prototype.icon = function(icon, parent, config) {
+	return this.el('span', parent, {
+		'class': 'font_icon ic-system'+icon
+	});
+};
+
 App.prototype.isAppDev = function(item) {
 	return this.manager.dev;
 };
 
 App.prototype.addDevAppButton = function(item, blocks) {
 	var button = this.el('button', this.findEl('#top_controls'), {
-		'class': 'item_button'
+		'class': 'item_button item_button_text'
 	}, 'Dev:'+item.title);
 	button.addEventListener('click', function (evt) {
 		iterateOver(blocks, function (block, cb) {
