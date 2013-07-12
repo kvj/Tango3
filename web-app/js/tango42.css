@@ -188,6 +188,7 @@ body {
 	border: 1px solid #aaaaaa;
 	background-color: #ffffff;
 	box-shadow: 1px 1px 1px #888888;
+	position: relative;
 }
 
 .card_focus {
@@ -416,20 +417,6 @@ body {
 	clear: both;
 }
 
-.star {
-    text-decoration: none;
-    font-size: 1.3em;
-    padding-right: 0.2em;
-    font-family: "Arial Unicode MS", Arial;
-}
-
-.starOn {
-    color: #dd8800;
-}
-
-.starOff {
-    color: #000000;
-}
 
 .indicator {
 	display: inline-block;
@@ -492,8 +479,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 0.3em;
+    height: 0.3em;
 }
 
 ::-webkit-scrollbar-track {
@@ -507,4 +494,48 @@ body {
 
 ::-webkit-scrollbar-corner {
 	background-color: transparent;
+}
+
+.bottom_table {
+	border-collapse: collapse;
+	width: 100%;
+	padding: 0;
+}
+
+.card_page_indicator {
+	position: absolute;
+	height: 100%;
+	width: 0.5em;
+	left: -0.5em;
+	top: 0em;
+	overflow: hidden;
+}
+
+.card_page_indicator_inner {
+	position: absolute;
+	top: 50%;
+	right: 0;
+	width: 0;
+	height: 0;
+	border: 0.5em solid transparent;
+	border-right-color: #aaaaaa;
+	margin-top: -0.5em;
+}
+
+.controller_pages {
+	position: absolute;
+	max-width: 90%;
+	min-width: 10em;
+	height: 100%;
+	top: 0;
+	right: 0;
+	box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	border: 2px solid #eeeeee;
+	display: none;
+	background-color: #ffffff;
+}
+
+.controller_pages_visible {
+	display: block;
 }

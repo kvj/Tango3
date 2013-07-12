@@ -110,6 +110,40 @@ Date.prototype.format = function (mask, utc) {
 	return dateFormat(this, mask, utc);
 };
 
+var FormController = function () {
+	this.controls = {};
+	this.originals = {};
+}
+
+FormController.prototype.add = function(name, element) {
+	this.controls[name] = element;
+};
+
+FormController.prototype.set = function(name, value) {
+	if (!this.controls[name]) {
+		return false;
+	};
+	this.controls[name].value = value || '';
+	this.originals[name] = value || '';
+};
+
+FormController.prototype.get = function(name) {
+	if (!this.controls[name]) {
+		return null;
+	};
+	return this.controls[name].value.trim();
+};
+
+FormController.prototype.changed = function() {
+	for (var name in this.controls) {
+		var value = this.get(name);
+		if (value != this.originals[name]) {
+			return true;
+		};
+	}
+	return false;
+};
+
 var NotepadPanel = function (app) {
 	this.app = app;
 	this.div = app.findEl('#left_pane');
@@ -197,16 +231,19 @@ var NotepadController = function (app, parent) {
 	this.app = app;
 	this.parent = parent;
 	this.visible = [];
+	this.selectedIndex = -1;
+	this.pagesVisible = false;
 	this.buildUI();
 	this.events = new EventEmitter(this);
 	app.events.on('resize', function (evt) {
 		this.resize();
 	}.bind(this));
-	app.events.on('add', function (evt) {
+	app.events.on(['add', 'update'], function (evt) {
 		if (this.root && evt.item.parent == this.root.id) {
 			// Refresh list
 			this.refreshList(function () {
-			});
+				this.refreshPageIndicator();
+			}.bind(this));
 		};
 	}.bind(this));
 	app.events.on('remove', function (evt) {
@@ -216,6 +253,7 @@ var NotepadController = function (app, parent) {
 		if (evt.item.parent == this.root.id) {
 			// page from our notepad - refresh list
 			this.refreshList(function () {
+				this.refreshPageIndicator();
 			}.bind(this));
 		};
 		if (evt.item.id == this.root.id) {
@@ -302,8 +340,17 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	this.app.el('div', this.contentDiv, {
 		'class': 'card_body_contents card_no_edit'
 	});
+	this.pagesDiv = this.app.el('div', this.contentDiv, {
+		'class': 'controller_pages scroll'
+	});
 	this.app.el('textarea', this.contentDiv, {
 		'class': 'card_editor card_editor_area editor_body card_in_edit'
+	});
+	var indicatorDiv = this.app.el('div', wrapper, {
+		'class': 'card_page_indicator'
+	});
+	this.indicatorDiv = this.app.el('div', indicatorDiv, {
+		'class': 'card_page_indicator_inner'
 	});
 	var tagsDiv = this.app.el('div', wrapper, {
 		'class': 'one_line card_bottom'
@@ -321,6 +368,13 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	button = this.app.el('button', bottomButtons, {
 		'class': 'item_button'
 	});
+	this.app.icon('document', button);
+	button.addEventListener('click', function (evt) {
+		this.togglePages();
+	}.bind(this));
+	button = this.app.el('button', bottomButtons, {
+		'class': 'item_button'
+	});
 	this.app.icon('arrowleft', button);
 	button.addEventListener('click', function (evt) {
 		this.raisePage(-1);
@@ -332,6 +386,38 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	button.addEventListener('click', function (evt) {
 		this.raisePage(1);
 	}.bind(this));
+};
+
+NotepadController.prototype.togglePages = function() {
+	this.pagesVisible = !this.pagesVisible;
+	if (this.pagesVisible) {
+		this.pagesDiv.classList.add('controller_pages_visible');
+		this.refreshPagesPane();
+	} else {
+		this.pagesDiv.classList.remove('controller_pages_visible');
+	}
+};
+
+NotepadController.prototype.refreshPagesPane = function() {
+	// Use pages
+	this.app.text(this.pagesDiv);
+	if (this.pages) {
+		// Iterate over
+		for (var i = 0; i < this.pages.length; i++) {
+			var onItem = function (item, index, div) {
+				div.addEventListener('click', function (evt) {
+					this.showPage(index);
+					this.togglePages();
+				}.bind(this));
+			}.bind(this);
+			var item = this.pages[i];
+			var div = this.app.el('div', this.pagesDiv, {
+				'class': 'left_item card_title_text one_line'
+			});
+			this.app.text(div, item.title);
+			onItem(item, i, div);
+		};
+	};
 };
 
 NotepadController.prototype.raisePage = function(direction) {
@@ -426,7 +512,7 @@ NotepadController.prototype.resize = function() {
 	this.width = 20;
 	this.height = 30;
 	var plusHeight = 9;
-	var plusWidth = 0;
+	var plusWidth = 1;
 	var inEm = this.app.pxInEm(this.parent);
 	var parentWidth = Math.floor(this.parent.offsetWidth / inEm);
 	var parentHeight = Math.floor(this.parent.offsetHeight / inEm);
@@ -442,7 +528,7 @@ NotepadController.prototype.resize = function() {
 
 NotepadController.prototype.load = function(item) {
 	// Called when it's time to load page
-	$$.log('Loading:', item);
+	// $$.log('Loading:', item);
 	this.div.classList.remove('controller_hidden');
 	if (this.isInEdit()) {
 		return false;
@@ -491,6 +577,7 @@ NotepadController.prototype.showPage = function(index, force) {
 	};
 	if (this.isInEdit() && !force) {
 		$$.log('Ignoring show - inEdit');
+		return;
 	};
 	// $$.log('Show page', index, this.pages.length);
 	if (!this.pages || index<0 || index>=this.pages.length) {
@@ -506,6 +593,13 @@ NotepadController.prototype.showPage = function(index, force) {
 		controller: this,
 		index: index
 	})];
+	this.refreshPageIndicator();
+};
+
+NotepadController.prototype.refreshPageIndicator = function() {
+	if (this.selectedIndex != -1 && this.pages && this.pages.length>this.selectedIndex) {
+		this.indicatorDiv.style.top = ''+Math.round((this.selectedIndex/(this.pages.length-1))*100)+'%';
+	};
 };
 
 NotepadController.prototype.find = function(id) {
@@ -540,6 +634,9 @@ NotepadController.prototype.refreshList = function(handler) {
 			};
 			this.pages = items;
 			handler(null, items);
+			if (this.pagesVisible) {
+				this.refreshPagesPane();
+			};
 			// TODO: Refresh indicator and bookmarks
 		}.bind(this));
 	}.bind(this))
@@ -1141,9 +1238,9 @@ App.prototype.renderGrid = function(config, div, handler) {
 		for (var i = 0; i < nl.length; i++) {
 			nl[i].parentNode.removeChild(nl[i]);
 		};
-		inEdit = false;
+		inEdit = null;
 	};
-	var inEdit = false;
+	var inEdit = null;
 	var maxCells = 1;
 	var renderCell = function (td, col, rowNum, colNum) {
 		var wrapper = this.el('div', td, {
@@ -1185,30 +1282,45 @@ App.prototype.renderGrid = function(config, div, handler) {
 				'class': 'item_td_editor'
 			});
 			var val = (col.value || '' == col.value) ? col.value: col.text;
+			var originalValue = type == 'edit'? val: '';
 			var etext = this.el('input', etd, {
 				'type': 'text',
 				'class': 'item_edit_text item_td_text_edit',
-				'value': type == 'edit'? val: '' 
+				'value':  originalValue
 			});
 			etext.addEventListener('keydown', function (evt) {
 				if (evt.keyCode == 13) {
 					// Finished
-					inEdit = false; // Edit is finished
+					inEdit = null; // Edit is finished
 					handler({type: type}, col, etext.value);
 					return false;
 				};
 				if (evt.keyCode == 27) {
 					// Cancel
+					var value = etext.value;
+					if (originalValue != value && !window.confirm('Discard changes?')) {
+						return false;
+					};
 					select();
 					return false;
 				};
 			})
 			etext.focus();
-			inEdit = true;
+			this.scrollToEl(etext, div.parentNode);
+			inEdit = function (message) {
+				if ('changed' == message) {
+					var value = etext.value;
+					$$.log('Compare', originalValue, value, originalValue != value);
+					return originalValue != value;
+				};
+			};
 		}.bind(this);
 		var select = function () {
 			removeSelection();
 			td.classList.add('item_td_edit_selected');
+			if (floatPanel) {
+				this.scrollToEl(floatPanel, div.parentNode);
+			};
 		}.bind(this);
 		var floatPanel = null;
 		if (col.edit || col.remove || col.add) {
@@ -1317,7 +1429,10 @@ App.prototype.renderGrid = function(config, div, handler) {
 	};
 	return function (message) {
 		if (message == 'locked') {
-			return inEdit;
+			if (inEdit) {
+				return inEdit('changed');
+			};
+			return false;
 		};
 	}.bind(this);
 };
@@ -1476,8 +1591,9 @@ App.prototype.renderItem = function(item, parent, config) {
 	var editHandlers = [];
 	var isInEdit = function () {
 		// Returns true if item is locked
+		// $$.log('isInEdit', inEdit, form.changed());
 		if (inEdit) {
-			return true;
+			return form.changed();
 		};
 		for (var i = 0; i < editHandlers.length; i++) {
 			var handler = editHandlers[i];
@@ -1556,11 +1672,17 @@ App.prototype.renderItem = function(item, parent, config) {
 			}.bind(this));
 		}.bind(this));
 	}.bind(this);
-	render('Item render');
 	var etitle = this.findEl('.editor_title', parent);
 	var ebody = this.findEl('.editor_body', parent);
 	var etags = this.findEl('.editor_tags', parent);
+	var form = new FormController();
+	form.add('title', etitle);
+	form.add('body', ebody);
+	form.add('tags', etags);
 	var onFinishEdit = function () {
+		if (form.changed() && !window.confirm('Discard changes?')) {
+			return false;
+		};
 		finishEdit();
 	}.bind(this);
 	var finishEdit = function () {
@@ -1568,9 +1690,9 @@ App.prototype.renderItem = function(item, parent, config) {
 		parent.classList.remove('card_edit');
 	}.bind(this);
 	var onSave = function () {
-		item.title = etitle.value.trim();
-		item.body = ebody.value;
-		var tags = etags.value.trim();
+		item.title = form.get('title');
+		item.body = form.get('body');
+		var tags = form.get('tags');
 		if (tags) {
 			item.tags = tags.split(' ');
 		} else {
@@ -1585,10 +1707,11 @@ App.prototype.renderItem = function(item, parent, config) {
 	var edit = function () {
 		inEdit = true;
 		parent.classList.add('card_edit');
+		form.set('body', item.body);
+		form.set('title', item.title);
+		form.set('tags', item.tags? item.tags.join(' '): '');
+
 		ebody.focus();
-		ebody.value = item.body || '';
-		etitle.value = item.title || '';
-		etags.value = item.tags? item.tags.join(' '): '';
 		// var save = this.el('button', ebuttons, {
 		// 	'class': 'item_button'
 		// }, 'Save');
@@ -1622,6 +1745,8 @@ App.prototype.renderItem = function(item, parent, config) {
 	}.bind(this);
 	this.events.on('update', onUpdate);
 	this.events.on('remove', onRemove);
+	finishEdit();
+	render('Item render');
 	return function (type, arg0, arg1, arg2) {
 		if ('div' == type) {
 			return div;
@@ -1713,10 +1838,28 @@ App.prototype.scrollToEl = function (el, parent) {
 	if (!el) {
 		return;
 	};
-	var p = parent || window;
-	var sto = el.offsetTop-10;
 	setTimeout(function () {
-		p.scrollTo(p.scrollX, sto);
+		var p = parent || window;
+		var findOffset = function (el, offs) {
+			if (!el) {
+				return offs;
+			};
+			offs.left += el.offsetLeft;
+			offs.top += el.offsetTop;
+			// $$.log('findOffset', el.offsetParent, p, offs.left, offs.top);
+			if (el.offsetParent != p) {
+				return findOffset(el.offsetParent, offs);
+			};
+			return offs;
+		};
+		var offsetRelative = findOffset(el, {left: 0, top: 0});
+		// $$.log('scrollToEl', p.scrollTop+parent.offsetHeight, offsetRelative.top+el.offsetHeight, p.scrollTop, parent.offsetHeight);
+		if (p.scrollTop+parent.offsetHeight<offsetRelative.top+el.offsetHeight) {
+			el.scrollIntoView(true);
+		};
+		if (p.scrollTop>offsetRelative.top) {
+			el.scrollIntoView(true);
+		};
 	}.bind(this), 10);
 };
 
