@@ -13,10 +13,16 @@ var SERVER_PORT_DEF = 3000;
 var CONFIG_FILE = 'apps.json';
 
 var express = require('express');
-var pg = require('pg');
+var pg = null;
+var nedb = null;
+pg = require('pg');
 var common = require('./js/common');
 var cors = require('cors');
 var fs = require('fs');
+
+var DataProvider = function(name, config) { // Implements abstract data access
+};
+
 var App = function() {
 	// Math.randomize(new Date().getTime());
 	this._id = 0;
