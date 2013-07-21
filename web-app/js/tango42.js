@@ -340,9 +340,6 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	this.app.el('div', this.contentDiv, {
 		'class': 'card_body_contents card_no_edit'
 	});
-	this.pagesDiv = this.app.el('div', this.contentDiv, {
-		'class': 'controller_pages scroll'
-	});
 	this.app.el('textarea', this.contentDiv, {
 		'class': 'card_editor card_editor_area editor_body card_in_edit'
 	});
@@ -354,6 +351,9 @@ NotepadController.prototype.buildUI = function(first_argument) {
 	});
 	var tagsDiv = this.app.el('div', wrapper, {
 		'class': 'one_line card_bottom'
+	});
+	this.pagesDiv = this.app.el('div', wrapper, {
+		'class': 'controller_pages scroll'
 	});
 	this.app.el('span', tagsDiv, {
 		'class': 'card_tags card_no_edit'
@@ -850,13 +850,16 @@ App.prototype.refreshSyncControls = function() {
 		}.bind(this));
 		var button = this.el('button', wrapper, {
 			'class': 'item_button item_button_text'
+		});
+		var buttonText = this.el('span', button, {
+			'class': 'item_button_text_span'
 		}, db.conn.code);
 		var doSync = function () {
 			button.disabled = true;
-			this.text(button, 'Sync...');
+			this.text(buttonText, 'Sync...');
 			db.sync(this.manager, function (err) {
 				button.disabled = false;
-				this.text(button, db.conn.code);
+				this.text(buttonText, db.conn.code);
 				if (err) {
 					this.showError(err);
 				} else {
@@ -1310,8 +1313,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 			inEdit = function (message) {
 				if ('changed' == message) {
 					var value = etext.value;
-					$$.log('Compare', originalValue, value, originalValue != value);
+					// $$.log('Compare', originalValue, value, originalValue != value);
 					return originalValue != value;
+				};
+				if ('resize' == message) { // Resized - scroll
+					this.scrollToEl(etext, div.parentNode);
 				};
 			};
 		}.bind(this);
@@ -1431,6 +1437,12 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (message == 'locked') {
 			if (inEdit) {
 				return inEdit('changed');
+			};
+			return false;
+		};
+		if (message == 'resize') {
+			if (inEdit) {
+				return inEdit('resize');
 			};
 			return false;
 		};
@@ -1735,6 +1747,12 @@ App.prototype.renderItem = function(item, parent, config) {
 			});
 		};
 	}.bind(this);
+	var onResize = function (evt) {
+		for (var i = 0; i < editHandlers.length; i++) {
+			var handler = editHandlers[i];
+			handler('resize');
+		};
+	}.bind(this);
 	var onFocus = function (focus, data) {
 		// $$.log('item focus:', item, focus, data, config.panel);
 		if (focus) {
@@ -1745,6 +1763,7 @@ App.prototype.renderItem = function(item, parent, config) {
 	}.bind(this);
 	this.events.on('update', onUpdate);
 	this.events.on('remove', onRemove);
+	this.events.on('resize', onResize);
 	finishEdit();
 	render('Item render');
 	return function (type, arg0, arg1, arg2) {
@@ -1755,6 +1774,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			// Unsubscribe
 			this.events.off('update', onUpdate);
 			this.events.off('remove', onRemove);
+			this.events.off('resize', onResize);
 		};
 		if ('locked' == type) {
 			return isInEdit();
@@ -1876,7 +1896,10 @@ App.prototype.isAppDev = function(item) {
 App.prototype.addDevAppButton = function(item, blocks) {
 	var button = this.el('button', this.findEl('#top_controls'), {
 		'class': 'item_button item_button_text'
-	}, 'Dev:'+item.title);
+	});
+	this.el('span', button, {
+		'class': 'item_button_text_span'
+	}, 'Dev: '+item.title);
 	button.addEventListener('click', function (evt) {
 		iterateOver(blocks, function (block, cb) {
 			if (block.type == 'block' && (block.params[0] == 'js' || block.params[0] == 'css') && block.params[1]) {

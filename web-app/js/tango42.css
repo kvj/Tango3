@@ -30,7 +30,7 @@ body {
 .left_item {
 	border: 1px solid #aaaaaa;
 	cursor: pointer;
-	font-family: sans-serif;
+	font-family: Helvetica, Arial, Sans-Serif;
 	margin: 0.1em;
 	border-radius: 0.2em;
 }
@@ -149,7 +149,7 @@ body {
 	top: 0;
 	font-size: 0.9em;
 	font-weight: bold;
-	font-family: sans-serif;
+	font-family: Helvetica, Arial, Sans-Serif;
 	z-index: 11;
 }
 
@@ -181,7 +181,7 @@ body {
 	background-color: #aa2222;
 	font-size: 0.9em;
 	font-weight: bold;
-	font-family: sans-serif;
+	font-family: Helvetica, Arial, Sans-Serif;
 }
 
 .card {
@@ -251,7 +251,7 @@ body {
 }
 
 .card_editor {
-	font-family: sans-serif;
+	font-family: Helvetica, Arial, Sans-Serif;
 	font-size: 0.8em;
 	background-color: transparent;
 	border: 1px solid #aaaaaa;
@@ -288,13 +288,13 @@ body {
 }
 
 .item_button {
-	margin: 0.1em;
+	margin-left: 0.2em;
 	font-size: 1em;
 	background-color: #eeeeee;
 	border: 1px solid #888888;
 	vertical-align: middle;
-	width: 1.6em;
-	height: 1.6em;
+	width: 1.65em;
+	height: 1.65em;
 	text-align: center;
 	padding: 0;
 	border-radius: 0.2em;
@@ -304,6 +304,11 @@ body {
 .item_button_text {
 	width: auto;
 	padding: 0 0.2em;
+}
+
+.item_button_text_span {
+	font-size: 0.8em;
+	vertical-align: baseline;
 }
 
 .item_button:active {
@@ -446,7 +451,7 @@ body {
 
 .controller_root {
 	display: inline-block;
-	font-family: sans-serif;
+	font-family: Helvetica, Arial, Sans-Serif;
 }
 
 .one_line {
