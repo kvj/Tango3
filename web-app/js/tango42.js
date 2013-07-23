@@ -182,6 +182,14 @@ var NotepadPanel = function (app) {
 			});
 		};
 	}.bind(this));
+	app.events.on('select', function (evt) {
+		// Item selected - update indicator
+		if (evt.item.parent == 'root') {
+			this.refreshIndicator(evt.item.id);
+		} else { // Ordinary page selected
+			this.refreshIndicator(evt.item.parent);
+		};
+	}.bind(this));
 };
 
 NotepadPanel.prototype.toggleVisible = function() {
@@ -189,7 +197,6 @@ NotepadPanel.prototype.toggleVisible = function() {
 	if (this.visible) {
 		// From hidden to visible
 		document.body.classList.remove('left_hidden');
-		this.refresh();
 	} else {
 		document.body.classList.add('left_hidden');
 	}
@@ -200,13 +207,17 @@ NotepadPanel.prototype.toggleVisible = function() {
 
 NotepadPanel.prototype.refresh = function(handler) {
 	var contentDiv = this.app.findEl('#left_content', this.div);
+	var selectedID = null;
+	if (this.notepads && this.notepads[this.selectedIndex]) { // Have selected
+		selectedID = this.notepads[this.selectedIndex].id;
+	};
 	this.app.list({parent: 'root', sort: 'title'}, function (err, list) {
 		if (err) {
 			return this.app.showError(err);
 		};
 		var renderItem = function (item, index) {
 			var div = this.app.el('div', contentDiv, {
-				'class': 'left_item card_title_text one_line'
+				'class': 'left_item card_title_text one_line text'
 			});
 			div.addEventListener('click', function (evt) {
 				this.app.events.emit('select', {
@@ -221,10 +232,71 @@ NotepadPanel.prototype.refresh = function(handler) {
 			renderItem(item, i);
 		};
 		this.notepads = list;
+		if (selectedID) { // Refresh indicator also
+			this.refreshPageIndicator(selectedID);
+		};
 		if (handler) {
 			handler(list);
 		};
 	}.bind(this));
+};
+
+NotepadPanel.prototype.refreshIndicator = function(id) { // Moves indicator
+	if (!this.notepads) { // Not loaded yet
+		return false;
+	};
+	if (this.pageIndicator) { // Was created before - remove
+		this.pageIndicator.parentNode.removeChild(this.pageIndicator);
+		this.pageIndicator = null;
+	};
+	this.selectedIndex = -1;
+	var index = -1;
+	for (var i = 0; i < this.notepads.length; i++) { // Search notepad by ID
+		if (this.notepads[i].id == id) { // Found
+			index = i;
+			break;
+		};
+	};
+	this.selectedIndex = index;
+	if (-1 == index) { // Not found
+		return false;
+	};
+	var contentDiv = this.app.findEl('#left_content', this.div);
+	var div = contentDiv.childNodes[index];
+	this.pageIndicator = this.app.el('div', div, {
+		'class': 'notepad_indicator'
+	});
+	this.app.scrollToEl(div, contentDiv);
+};
+
+NotepadPanel.prototype.raiseNotepad = function(direction) {
+	if (!this.notepads) {
+		return;
+	};
+	var idx = this.selectedIndex;
+	switch(direction) {
+		case -1: // Back page
+			if (idx <= 0) {
+				return;
+			};
+			idx--;
+			break;
+		case 1: // Next page
+			if (idx>=this.notepads.length-1) {
+				return;
+			};
+			idx++;
+			break;
+		case -2: // Top page
+			idx = 0;
+			break;
+		case 2: // Last page
+			idx = this.notepads.length-1;
+			break;
+	}
+	this.app.events.emit('select', {
+		item: this.notepads[idx]
+	});
 };
 
 var NotepadController = function (app, parent) {
@@ -280,7 +352,7 @@ var NotepadController = function (app, parent) {
 
 NotepadController.prototype.buildUI = function(first_argument) {
 	this.div = this.app.el('div', this.parent, {
-		'class': 'controller_root controller_hidden'
+		'class': 'controller_root controller_hidden text'
 	});
 	var topButtons = this.app.el('div', this.div, {
 		'class': 'controller_panel one_line'
@@ -331,7 +403,7 @@ NotepadController.prototype.buildUI = function(first_argument) {
 		'class': 'card_title_text card_no_edit'
 	});
 	this.app.el('input', titleDiv, {
-		'class': 'card_editor card_title_text editor_title card_in_edit',
+		'class': 'card_editor card_title_text editor_title card_in_edit text',
 		'type': 'text'
 	});
 	this.contentDiv = this.app.el('div', wrapper, {
@@ -341,7 +413,7 @@ NotepadController.prototype.buildUI = function(first_argument) {
 		'class': 'card_body_contents card_no_edit'
 	});
 	this.app.el('textarea', this.contentDiv, {
-		'class': 'card_editor card_editor_area editor_body card_in_edit'
+		'class': 'card_editor card_editor_area editor_body card_in_edit text'
 	});
 	var indicatorDiv = this.app.el('div', wrapper, {
 		'class': 'card_page_indicator'
@@ -359,7 +431,7 @@ NotepadController.prototype.buildUI = function(first_argument) {
 		'class': 'card_tags card_no_edit'
 	});
 	this.app.el('input', tagsDiv, {
-		'class': 'card_editor editor_tags card_in_edit',
+		'class': 'card_editor editor_tags card_in_edit text',
 		'type': 'text'
 	});
 	var bottomButtons = this.app.el('div', this.div, {
@@ -425,25 +497,33 @@ NotepadController.prototype.raisePage = function(direction) {
 		return;
 	};
 	var idx = this.selectedIndex;
-	if (direction == -1) {
-		if (idx == 0) {
-			return;
-		};
-		idx--;
-	};
-	if (direction == 1) {
-		if (idx>=this.pages.length-1) {
-			return;
-		};
-		idx++;
-	};
+	switch(direction) {
+		case -1: // Back page
+			if (idx == 0) {
+				return;
+			};
+			idx--;
+			break;
+		case 1: // Next page
+			if (idx>=this.pages.length-1) {
+				return;
+			};
+			idx++;
+			break;
+		case -2: // Top page
+			idx = 0;
+			break;
+		case 2: // Last page
+			idx = this.pages.length-1;
+			break;
+	}
 	this.showPage(idx);
 	this.refreshList(function () {
 	});
 };
 
 NotepadController.prototype.editItem = function() {
-	if (!this.root || this.isInEdit() || this.visible.length == 0) {
+	if (!this.root || this.sendMessage('locked') || this.visible.length == 0) {
 		return;
 	};
 	this.visible[0]('edit');
@@ -530,7 +610,7 @@ NotepadController.prototype.load = function(item) {
 	// Called when it's time to load page
 	// $$.log('Loading:', item);
 	this.div.classList.remove('controller_hidden');
-	if (this.isInEdit()) {
+	if (this.sendMessage('locked')) {
 		return false;
 	};
 	var root = {
@@ -575,7 +655,7 @@ NotepadController.prototype.showPage = function(index, force) {
 	if (!this.root) {
 		return;
 	};
-	if (this.isInEdit() && !force) {
+	if (this.sendMessage('locked') && !force) {
 		$$.log('Ignoring show - inEdit');
 		return;
 	};
@@ -643,9 +723,9 @@ NotepadController.prototype.refreshList = function(handler) {
 
 };
 
-NotepadController.prototype.isInEdit = function() {
+NotepadController.prototype.sendMessage = function(state) {
 	for (var i = 0; i < this.visible.length; i++) {
-		if (this.visible[i]('locked')) {
+		if (this.visible[i](state)) {
 			return true;
 		};
 	};
@@ -927,7 +1007,11 @@ App.prototype.showError = function(message, persist) {
 	});
 };
 
-App.prototype.isInEdit = function() {
+App.prototype.sendMessage = function(state) {
+	var panel = this.panels[this.selectedPanel];
+	if (panel && panel.sendMessage(state)) { // In requested state
+		return true;
+	};
 	return false;
 };
 
@@ -935,13 +1019,12 @@ App.prototype.initUI = function(handler) {
 	this.selected = null;
 	this.panels = [];
 	this.panels.push(new NotepadController(this, this.findEl('#right_pane')));
+	this.selectedPanel = 0;
 	this.narrow = false;
 	this.refreshSyncControls();
 	this.showInfo('Application loaded');
 	this.leftPanel = new NotepadPanel(this);
 	this.initLog();
-	$$.log('Test log', true, new Date(), 10, 0.1, null, undefined, {aaa: 'bbb'}, [0, '1'], this.findEl('#right_pane'), function() { // 
-	});
 	this.loadApplications();
 	this.keyHandler();
 	this.selectHandler();
@@ -954,6 +1037,10 @@ App.prototype.initLog = function() { // Overrides log function and prints log to
 	};
 	var maxLines = 100;
 	var logDiv = this.findEl('#log_pane');
+	logDiv.addEventListener('click', function(evt) { // Click on log - hide pane
+		toggleVisible();
+		evt.stopPropagation();
+	});
 	var topButton = this.el('button', this.findEl('#top_controls'), {
 		'class': 'item_button'
 	});
@@ -1141,10 +1228,55 @@ App.prototype.keyHandler = function() {
 			evt.stopPropagation();
 			return false;
 		}.bind(this);
-		if (!this.isInEdit()) {
-			// Most key buttons work in browse mode
+		var panel = this.panels[this.selectedPanel];
+		var code = evt.keyCode;
+		var e = {
+			code: code,
+			ctrl: evt.ctrlKey || false,
+			alt: evt.altKey || false,
+			shift: evt.shiftKey || false
 		};
-		// $$.log('Keydown', evt.keyCode, this.isInEdit());
+		// $$.log('keyHandler', this.sendMessage('editing'), code);
+		if (!this.sendMessage('editing')) {
+			// Most key buttons work in browse mode
+			if (code == 32) { // Space - edit
+				panel.sendMessage('edit');
+				return stop();
+			};
+			if (code == 33) { // PgUp - page -1
+				if (e.shift) { // Notepad level
+					this.leftPanel.raiseNotepad(-1);
+				} else { // Page level
+					panel.raisePage(-1);
+				};
+				return stop();
+			};
+			if (code == 34) { // PgDown - page +1
+				if (e.shift) { // Notepad level
+					this.leftPanel.raiseNotepad(1);
+				} else { // Page level
+					panel.raisePage(1);
+				};
+				return stop();
+			};
+			if (code == 36) { // Home - top page
+				panel.raisePage(-2);
+				return stop();
+			};
+			if (code == 35) { // End - last page
+				panel.raisePage(2);
+				return stop();
+			};
+		} else {
+			if (code == 27) { // Escape - cancel edit
+				panel.sendMessage('cancel');
+				return stop();
+			};
+			if (code == 13 && e.ctrl) { // Save with ctrl+enter
+				panel.sendMessage('save');
+				return stop();
+			};
+		}
 	}.bind(this));
 };
 
@@ -1513,11 +1645,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 			floatPanel = this.el('div', wrapper, {
 				'class': 'td_float_panel'
 			});
-			td.addEventListener('click', function (evt) {
-				select();
-				evt.stopPropagation();
-			});
 		};
+		td.addEventListener('click', function (evt) {
+			select();
+			evt.stopPropagation();
+		});
 		if (col.add) {
 			// Can edit with simple one-line text box
 			var addButton = this.el('button', floatPanel, {
@@ -1577,13 +1709,18 @@ App.prototype.renderGrid = function(config, div, handler) {
 				'text/plain': col.text || ''
 			});
 		};
+		return function(message) { // Called from outside, for control
+		}.bind(this);
 	}.bind(this);
+	var gridControl = [];
 	for (var i = 0; i < config.rows.length; i++) {
 		var row = config.rows[i];
 		var tr = this.el('tr', table, {
 			'class': 'item_tr'
 		});
 		var cells = 0;
+		var rowControl = [];
+		gridControl.push(rowControl);
 		for (var j = 0; j < row.cols.length; j++) {
 			var col = row.cols[j];
 			var cl = 'item_td';
@@ -1605,7 +1742,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			} else {
 				cells++;
 			}
-			renderCell(td, col, i, j);
+			rowControl.push(renderCell(td, col, i, j));
 		};
 		if (cells>maxCells) {
 			maxCells = cells;
@@ -1618,11 +1755,20 @@ App.prototype.renderGrid = function(config, div, handler) {
 			};
 			return false;
 		};
+		if (message == 'editing') {
+			if (inEdit) {
+				return true;
+			};
+			return false;
+		};
 		if (message == 'resize') {
 			if (inEdit) {
 				return inEdit('resize');
 			};
 			return false;
+		};
+		if (message == 'cancel') { // Cancel edit - now handled differently
+			return true;
 		};
 	}.bind(this);
 };
@@ -1765,7 +1911,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		'custom/item': function (other) {
 			// Dropped tag
 			var tags = item.tags || [];
-			if (tags.indexOf(other.id) == -1 && !isInEdit()) {
+			if (tags.indexOf(other.id) == -1 && !inState('editing')) {
 				tags.push(other.id);
 				item.updated = new Date().getTime();
 				item.tags = tags;
@@ -1779,15 +1925,19 @@ App.prototype.renderItem = function(item, parent, config) {
 	this.text(bottomDiv);
 	var inEdit = false;
 	var editHandlers = [];
-	var isInEdit = function () {
+	var inState = function (state) {
 		// Returns true if item is locked
-		// $$.log('isInEdit', inEdit, form.changed());
-		if (inEdit) {
-			return form.changed();
+		if (inEdit) { // Own editor active
+			if (state == 'editing') { // Directly from inEdit
+				return true;
+			};
+			if (state == 'locked') {
+				return form.changed();
+			};
 		};
 		for (var i = 0; i < editHandlers.length; i++) {
 			var handler = editHandlers[i];
-			if (handler('locked')) {
+			if (handler(state)) {
 				return true;
 			};
 		};
@@ -1834,9 +1984,6 @@ App.prototype.renderItem = function(item, parent, config) {
 				var _gridHandler = function () {
 					// Rendered
 					this.saveBlocks(blocks, function (text) {
-						if (isInEdit()) {
-							return;
-						};
 						item.updated = new Date().getTime();
 						item.body = text;
 						this.updateItem(item, function () {
@@ -1870,6 +2017,15 @@ App.prototype.renderItem = function(item, parent, config) {
 	form.add('body', ebody);
 	form.add('tags', etags);
 	var onFinishEdit = function () {
+		if (!inEdit) { // Maybe grid editor
+			for (var i = 0; i < editHandlers.length; i++) {
+				var handler = editHandlers[i];
+				if (handler(state)) {
+					return true;
+				};
+			};
+			return false;
+		};
 		if (form.changed() && !window.confirm('Discard changes?')) {
 			return false;
 		};
@@ -1912,7 +2068,7 @@ App.prototype.renderItem = function(item, parent, config) {
 	var onUpdate = function (evt) {
 		if (evt.item && evt.item.id == item.id) {
 			item = evt.item;
-			if (!isInEdit()) {
+			if (!inState('locked')) {
 				render('Update event');
 			};
 		};
@@ -1945,6 +2101,7 @@ App.prototype.renderItem = function(item, parent, config) {
 	finishEdit();
 	render('Item render');
 	return function (type, arg0, arg1, arg2) {
+		// $$.log('Came message:', type);
 		if ('div' == type) {
 			return div;
 		};
@@ -1954,8 +2111,8 @@ App.prototype.renderItem = function(item, parent, config) {
 			this.events.off('remove', onRemove);
 			this.events.off('resize', onResize);
 		};
-		if ('locked' == type) {
-			return isInEdit();
+		if ('locked' == type || 'editing' == type) {
+			return inState(type);
 		};
 		if ('focus' == type) {
 			return onFocus(arg0, arg1);
@@ -1967,7 +2124,7 @@ App.prototype.renderItem = function(item, parent, config) {
 			return onFinishEdit();
 		};
 		if ('save' == type) {
-			if (isInEdit) {
+			if (inState('editing')) {
 				// Editor active
 				return onSave();
 			};

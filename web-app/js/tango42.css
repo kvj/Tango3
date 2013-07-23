@@ -27,10 +27,13 @@ body {
 	z-index: 10;
 }
 
+.text {
+	font-family: Helvetica, Arial, Sans-Serif !important;
+}
+
 .left_item {
 	border: 1px solid #aaaaaa;
 	cursor: pointer;
-	font-family: Helvetica, Arial, Sans-Serif;
 	margin: 0.1em;
 	border-radius: 0.2em;
 }
@@ -149,7 +152,6 @@ body {
 	top: 0;
 	font-size: 0.9em;
 	font-weight: bold;
-	font-family: Helvetica, Arial, Sans-Serif;
 	z-index: 12;
 }
 
@@ -181,7 +183,6 @@ body {
 	background-color: #aa2222;
 	font-size: 0.9em;
 	font-weight: bold;
-	font-family: Helvetica, Arial, Sans-Serif;
 }
 
 .card {
@@ -251,7 +252,6 @@ body {
 }
 
 .card_editor {
-	font-family: Helvetica, Arial, Sans-Serif;
 	font-size: 0.8em;
 	background-color: transparent;
 	border: 1px solid #aaaaaa;
@@ -337,6 +337,7 @@ body {
 
 .item_td {
 	margin: 0.1em;
+	cursor: pointer;
 }
 
 .item_td_wrap {
@@ -349,7 +350,6 @@ body {
 }
 
 .item_td_edit {
-	cursor: pointer;
 }
 
 .item_td_edit:hover {
@@ -451,7 +451,6 @@ body {
 
 .controller_root {
 	display: inline-block;
-	font-family: Helvetica, Arial, Sans-Serif;
 }
 
 .one_line {
@@ -548,8 +547,8 @@ body {
 .log_pane {
 	position: absolute;
 	display: none;
-	left: 4em;
-	top: 3em;
+	left: 2em;
+	top: 2em;
 	width: 30em;
 	height: 30em;
 	z-index: 11;
@@ -621,3 +620,15 @@ body {
 .l_date {
 	color: #882288;
 }
+
+.notepad_indicator {
+	position: absolute;
+	top: 50%;
+	right: 0;
+	width: 0;
+	height: 0;
+	border: 0.5em solid transparent;
+	border-right-color: #aaaaaa;
+	margin-top: -0.5em;
+}
+
