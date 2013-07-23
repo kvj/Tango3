@@ -150,7 +150,7 @@ body {
 	font-size: 0.9em;
 	font-weight: bold;
 	font-family: Helvetica, Arial, Sans-Serif;
-	z-index: 11;
+	z-index: 12;
 }
 
 .message {
@@ -543,4 +543,81 @@ body {
 
 .controller_pages_visible {
 	display: block;
+}
+
+.log_pane {
+	position: absolute;
+	display: none;
+	left: 4em;
+	top: 3em;
+	width: 30em;
+	height: 30em;
+	z-index: 11;
+	background-color: #ffffff;
+	border: 2px solid #888888;
+	overflow: auto;
+}
+
+.left_hidden .log_pane {
+	right: 2em;
+	bottom: 2em;
+	width: auto;
+	height: auto;
+	opacity: 0.75;
+}
+
+.log_pane_visible {
+	display: block;
+}
+
+.log_pane_line {
+	font-size: 0.9em;
+	line-height: 1.3em;
+}
+
+.log_pane_line .l {
+	margin-right: 0.2em;
+	margin-left: 0.2em;
+}
+
+.l_str {
+	color: #882222;
+}
+
+.l_bool {
+	color: #228822;
+}
+
+.l_num {
+	color: #2222dd;
+}
+
+.l_null {
+	color: #8888ff;
+}
+
+.l_fun {
+	color: #44aa44;
+}
+
+.l_obj_attr {
+	margin-left: 0.5em;
+}
+
+.l_click {
+	cursor: pointer;
+}
+
+.l_wrap {
+	display: none;
+}
+
+.l_dim {
+	color: #888888;
+	margin-right: 0.2em;
+	margin-left: 0.2em;
+}
+
+.l_date {
+	color: #882288;
 }

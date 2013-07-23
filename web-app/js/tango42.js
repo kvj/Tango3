@@ -939,10 +939,187 @@ App.prototype.initUI = function(handler) {
 	this.refreshSyncControls();
 	this.showInfo('Application loaded');
 	this.leftPanel = new NotepadPanel(this);
+	this.initLog();
+	$$.log('Test log', true, new Date(), 10, 0.1, null, undefined, {aaa: 'bbb'}, [0, '1'], this.findEl('#right_pane'), function() { // 
+	});
 	this.loadApplications();
 	this.keyHandler();
 	this.selectHandler();
 	handler();
+};
+
+App.prototype.initLog = function() { // Overrides log function and prints log to log pane
+	if (!this.manager.dev) { // Not in dev version
+		return false; // No action necessary
+	};
+	var maxLines = 100;
+	var logDiv = this.findEl('#log_pane');
+	var topButton = this.el('button', this.findEl('#top_controls'), {
+		'class': 'item_button'
+	});
+	this.icon('put', topButton);
+	this.logVisible = false;
+	var toggleVisible = function() { // Shows/hides log pane
+		this.logVisible = !this.logVisible;
+		if (this.logVisible) { // Add class
+			logDiv.classList.add('log_pane_visible');
+		} else { // Remove class
+			logDiv.classList.remove('log_pane_visible');
+		};
+	}.bind(this);
+	topButton.addEventListener('click', function (evt) {
+		toggleVisible();
+	}.bind(this));
+	var superLog = $$.log;
+	var renderLog = function(args) { // Renders parameters
+		var div = this.el('div', null, {
+			'class': 'log_pane_line'
+		});
+		var renderItem = function(item) { // Renders one item
+			var visible = false;
+			var span = this.el('span', null, {
+				'class': 'l'
+			});
+			var type = typeof(item);
+			if (type == 'string') { // String
+				span.classList.add('l_str');
+				if (item.length>20) { // Clickable
+					span.classList.add('l_click');
+					var part = item.substr(0, 20)+"...";
+					this.text(span, "'"+part+"'");
+					span.addEventListener('click', function(evt) { // Toggle full string
+						visible = !visible;
+						this.text(span, "'"+(visible? item: part)+"'");
+						evt.stopPropagation();
+					}.bind(this));
+					return span;
+				};
+				this.text(span, "'"+item+"'");
+				return span;
+			};
+			if (type == 'number') { // String
+				this.text(span, ""+item);
+				span.classList.add('l_num');
+				return span;
+			};
+			if (type == 'boolean') { // Boolean
+				this.text(span, ""+item);
+				span.classList.add('l_bool');
+				return span;
+			};
+			if (type == 'undefined') { // Undefined
+				this.text(span, 'undefined');
+				span.classList.add('l_null');
+				return span;
+			};
+			if (type == 'function') { // Function
+				this.text(span, 'fun(...)');
+				span.classList.add('l_fun');
+				return span;
+			};
+			// From here - only objects
+			if (item == null) { // Undefined
+				this.text(span, 'null');
+				span.classList.add('l_null');
+				return span;
+			};
+			if (typeof(item.getMonth) === 'function') { // This is date
+				this.text(span, item.format('yy-mm-dd HH:MM:ss'));
+				span.classList.add('l_date');
+				return span;
+			};
+			if (Array.isArray(item)) { // This is array
+				this.el('span', span, {
+					'class': 'l_arr_char'
+				}, '[');
+				this.el('span', span, {
+					'class': 'l_dim'
+				}, ''+item.length);
+				span.classList.add('l_click');
+				var wrapper = this.el('span', span, {
+					'class': 'l_wrap',
+				});
+				for (var i = 0; i < item.length; i++) { // Render array item
+					if (i>0) { // Add comma
+						this.el('span', wrapper, {
+							'class': 'l_arr_char'
+						}, ',');
+						this.el('span', wrapper, {}, ' ');
+					};
+					wrapper.appendChild(renderItem(item[i]));
+				};
+				span.addEventListener('click', function(evt) { // Toggle full string
+					visible = !visible;
+					wrapper.style.display = visible? 'inline': 'none';
+					evt.stopPropagation();
+				}.bind(this));
+				this.el('span', span, {
+					'class': 'l_arr_char'
+				}, ']');
+				return span;
+			};
+			// Plain object?
+			this.el('span', span, {
+				'class': 'l_obj_char'
+			}, '{');
+			span.classList.add('l_click');
+			var dim = this.el('span', span, {
+					'class': 'l_dim'
+				});
+			var wrapper = this.el('span', span, {
+				'class': 'l_wrap',
+			});
+			span.addEventListener('click', function(evt) { // Toggle full string
+				visible = !visible;
+				wrapper.style.display = visible? 'inline': 'none';
+				evt.stopPropagation();
+			}.bind(this));
+			var i = 0;
+			for (var id in item) { // Render array item
+				if (!item.hasOwnProperty(id)) { // Not own
+					continue;
+				};
+				if (i>0) { // Add comma
+					this.el('span', wrapper, {
+						'class': 'l_obj_char'
+					}, ',');
+					this.el('span', wrapper, {}, ' ');
+				};
+				this.el('span', wrapper, {
+					'class': 'l_obj_attr'
+				}, id);
+				this.el('span', wrapper, {
+					'class': 'l_obj_char'
+				}, ':');
+				wrapper.appendChild(renderItem(item[id]));
+				i++;
+			};
+			this.text(dim, ''+i);
+			this.el('span', span, {
+				'class': 'l_obj_char'
+			}, '}');
+			return span;
+		}.bind(this);
+		for (var i = 0; i < args.length; i++) { // Create one by one
+			var item = args[0];
+			// console.log('Log', 0, args[i], typeof(args[i]));
+			div.appendChild(renderItem(args[i]));
+			this.el('span', div, {}, ' ');
+		};
+		return div; // Ready to insert div element
+	}.bind(this);
+	$$.log = function() { // Override log
+		var line = renderLog(arguments);
+		var nl = logDiv.childNodes;
+		while(nl && nl.length>=maxLines) {
+			logDiv.removeChild(nl.item(0));
+		}
+		logDiv.appendChild(line);
+		if (this.logVisible) { // If visible - scroll
+			this.scrollToEl(line, logDiv);
+		};
+		return superLog.apply($$, arguments);
+	}.bind(this);
 };
 
 App.prototype.selectHandler = function() {
@@ -1000,6 +1177,7 @@ App.prototype.enableDrop = function(div, types) {
 				};
 				if (types[t](value, t) == false) {
 					evt.stopPropagation();
+					evt.preventDefault();
 				};
 			};
 		};
