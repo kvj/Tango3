@@ -538,6 +538,10 @@ NotepadController.prototype.sendMessage = function(message) {
 	};
 };
 
+NotepadController.prototype.keyHandler = function(e) { // Key handler
+	this.visible[0]('key', e);
+};
+
 NotepadController.prototype.createNewItem = function() {
 	if (!this.root) {
 		return;
@@ -1267,6 +1271,39 @@ App.prototype.keyHandler = function() {
 				panel.raisePage(2);
 				return stop();
 			};
+			var passToItem = false;
+			if (code == 37) { // Left
+				e.key = 'left';
+				passToItem = true;
+			};
+			if (code == 39) { // Right
+				e.key = 'right';
+				passToItem = true;
+			};
+			if (code == 38) { // Top
+				e.key = 'up';
+				passToItem = true;
+			};
+			if (code == 40) { // Bottom
+				e.key = 'down';
+				passToItem = true;
+			};
+			if (code == 13) { // Enter
+				e.key = 'enter';
+				passToItem = true;
+			};
+			if (code == 45) { // Insert
+				e.key = 'insert';
+				passToItem = true;
+			};
+			if (code == 46) { // Delete
+				e.key = 'delete';
+				passToItem = true;
+			};
+			if (passToItem) { // Item will process this
+				panel.keyHandler(e);
+				return stop();
+			};
 		} else {
 			if (code == 27) { // Escape - cancel edit
 				panel.sendMessage('cancel');
@@ -1570,6 +1607,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 				this.text(button, col.text);
 			}
 			button.addEventListener('click', function (evt) {
+				select();
 				handler({type: 'button'}, col);
 			}.bind(this));
 		} else {
@@ -1619,6 +1657,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 				};
 			})
 			etext.focus();
+			etext.selectionStart = (originalValue || '').length;
 			this.scrollToEl(etext, div.parentNode);
 			inEdit = function (message) {
 				if ('changed' == message) {
@@ -1637,6 +1676,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			if (floatPanel) {
 				this.scrollToEl(floatPanel, div.parentNode);
 			};
+			config.controller('grid_focus', controller, {row: rowNum, col: colNum});
 		}.bind(this);
 		var floatPanel = null;
 		if (col.edit || col.remove || col.add) {
@@ -1692,6 +1732,13 @@ App.prototype.renderGrid = function(config, div, handler) {
 				}.bind(this)
 			});
 		};
+		var doRemove = function() { // Ask and remove
+			if (window.confirm('Delete line?')) { // User approved
+				handler({type: 'remove'}, col);
+				return true;
+			};
+			return false;
+		}.bind(this);
 		if (col.remove) {
 			// Can edit with simple one-line text box
 			var removeButton = this.el('button', floatPanel, {
@@ -1699,7 +1746,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			});
 			this.icon('trash1', removeButton);
 			removeButton.addEventListener('click', function (evt) {
-				handler({type: 'remove'}, col);
+				doRemove();
 				evt.stopPropagation();
 			}.bind(this));
 		};
@@ -1710,6 +1757,18 @@ App.prototype.renderGrid = function(config, div, handler) {
 			});
 		};
 		return function(message) { // Called from outside, for control
+			if (message == 'select') { // Select
+				return select();
+			};
+			if (message == 'add' && col.add) { // Can add
+				renderEditor('add');
+			};
+			if (message == 'edit' && col.edit) { // Can edit
+				renderEditor('edit');
+			};
+			if (message == 'delete' && col.remove) { // Can add
+				doRemove();
+			};
 		}.bind(this);
 	}.bind(this);
 	var gridControl = [];
@@ -1748,7 +1807,66 @@ App.prototype.renderGrid = function(config, div, handler) {
 			maxCells = cells;
 		};
 	};
-	return function (message) {
+	var keyHandler = function(e, cursor) { // Key handler - movement, etc
+		var rowControl = gridControl[cursor.row];
+		if (rowControl && rowControl[cursor.col]) { // Cursor is valid - can do operations
+			if (e.key == 'enter') { // Edit
+				rowControl[cursor.col]('edit');	
+				return;
+			};
+			if (e.key == 'insert') { // Insert
+				rowControl[cursor.col]('add');	
+				return;
+			};
+			if (e.key == 'delete') { // Delete
+				rowControl[cursor.col]('delete');	
+				return;
+			};
+		};
+		if (cursor.row == -1) { // Last row
+			cursor.row = gridControl.length-1;
+		};
+		if (cursor.row>=gridControl.length) { // Too big
+			cursor.row = 0;
+		};
+		if (e.key == 'up' && 0 == cursor.row) { // Top row and up
+			return false;
+		};
+		if (e.key == 'down' && cursor.row == gridControl.length - 1) { // Bottom row and down
+			return false;
+		};
+		if (e.key == 'up') { // row--
+			cursor.row--;
+		};
+		if (e.key == 'down') { // row++
+			cursor.row++;
+		};
+		rowControl = gridControl[cursor.row];
+		if (cursor.col>=rowControl.length) { // Too right
+			cursor.col = 0;
+		};
+		if (cursor.col == -1) { // Reset to 0
+			cursor.col = 0;
+		};
+		if (e.key == 'left') { // Left
+			if (cursor.col>0) { // --
+				cursor.col--;
+			} else { // To right
+				cursor.col = rowControl.length-1;
+			};
+		};
+		if (e.key == 'right') { // Right
+			if (cursor.col<rowControl.length-1) { // ++
+				cursor.col++;
+			} else { // To left
+				cursor.col = 0;
+			};
+		};
+		// $$.log('rowControl', rowControl[cursor.col], e.key, rowControl, cursor);
+		rowControl[cursor.col]('select');
+	};
+	var controller = function (message, arg0, arg1) {
+		// $$.log('Grid key', message, arg0, arg1);
 		if (message == 'locked') {
 			if (inEdit) {
 				return inEdit('changed');
@@ -1770,7 +1888,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (message == 'cancel') { // Cancel edit - now handled differently
 			return true;
 		};
+		if (message == 'key') { // Key handler
+			return keyHandler(arg0, arg1);
+		};
 	}.bind(this);
+	return controller;
 };
 
 App.prototype.saveBlocks = function(blocks, handler) {
@@ -1925,6 +2047,56 @@ App.prototype.renderItem = function(item, parent, config) {
 	this.text(bottomDiv);
 	var inEdit = false;
 	var editHandlers = [];
+	var cursor = {grid: -1, row: -1, col: -1};
+	var addGrid = function(cb) { // Adds grid to editHandlers, restores selection
+		if (!cb) { // Invalid handler
+			return false;
+		};
+		editHandlers.push(cb);
+		return true;
+	}.bind(this);
+	var focusChanged = function(grid, pos) { // Called when focus is changed inside grid
+		var index = editHandlers.indexOf(grid);
+		cursor.grid = index;
+		if (-1 == index) { // Not found
+			return;
+		};
+		cursor.row = pos.row;
+		cursor.col = pos.col;
+	};
+	var keyHandler = function(e) { // On key handler
+		if (editHandlers.length == 0) { // No grids
+			return false;
+		};
+		var gridOK = function() { // Checks whether cursor points to correct grid
+			if (-1 == cursor.grid || cursor.grid>=editHandlers.length) { // Out of bounds
+				if (e.key == 'up') { // Bottom one
+					cursor.grid = editHandlers.length - 1;
+				} else { // Top one
+					cursor.grid = 0;
+				};
+				cursor.row = 0;
+				cursor.col = 0;
+				return false;
+			};
+			return true; // Within bounds
+		};
+		if (!gridOK()) { // Need to select grid
+		};
+		var keyResult = editHandlers[cursor.grid]('key', e, cursor);
+		if (false == keyResult) { // Failed to process - switch to other grid
+			if (e.key == 'up') { // Bottom one
+				cursor.grid--;
+				cursor.row = -1;
+			} else { // Top one
+				cursor.grid++;
+				cursor.row = 0;
+			};
+			if (!gridOK()) { // Invalid grid
+			};
+			editHandlers[cursor.grid]('key', e, cursor);
+		};
+	};
 	var inState = function (state) {
 		// Returns true if item is locked
 		if (inEdit) { // Own editor active
@@ -1981,11 +2153,14 @@ App.prototype.renderItem = function(item, parent, config) {
 		this.parseLines(item.body, function (blocks) {
 			// By default, render grid with one row per line
 			this.onEveryApplication(item, function (configs) {
-				var _gridHandler = function () {
+				var _gridHandler = function (new_blocks, data) {
 					// Rendered
 					this.saveBlocks(blocks, function (text) {
 						item.updated = new Date().getTime();
 						item.body = text;
+						if (data.type == 'add') { // Move cursor to next row
+							cursor.row++;
+						};
 						this.updateItem(item, function () {
 							//render('Grid updated');
 						}.bind(this));
@@ -1996,16 +2171,16 @@ App.prototype.renderItem = function(item, parent, config) {
 				editHandlers = [];
 				for (var i = 0; i < configs.length; i++) {
 					var conf = configs[i];
-					var cb = this.execApp('onRender', conf, item, bodyDiv, blocks, _gridHandler);
-					if (cb) {
-						editHandlers.push(cb);
-					};
+					var cb = this.execApp('onRender', conf, item, controller, _gridHandler);
+					addGrid(cb);
 				};
-				if (editHandlers.length == 0) {
+				if (configs.length == 0) {
 					var grid = blocksToGrid(blocks);
+					grid.controller = controller;
 					var editHandler = this.gridHandler(blocks, grid, bodyDiv, _gridHandler);
-					editHandlers.push(editHandler);
+					addGrid(editHandler);
 				};
+				keyHandler({});
 			}.bind(this));
 		}.bind(this));
 	}.bind(this);
@@ -2099,9 +2274,17 @@ App.prototype.renderItem = function(item, parent, config) {
 	this.events.on('remove', onRemove);
 	this.events.on('resize', onResize);
 	finishEdit();
-	render('Item render');
-	return function (type, arg0, arg1, arg2) {
+	var controller = function (type, arg0, arg1, arg2) {
 		// $$.log('Came message:', type);
+		if ('add_grid' == type) { // Render grid to editHandlers
+			arg0.controller = controller;
+			var cb = this.renderGrid(arg0, bodyDiv, arg1);
+			addGrid(cb);
+			return cb;
+		};
+		if ('grid_focus' == type) { // Called by renderGrid when focus is changed
+			return focusChanged(arg0, arg1);
+		};
 		if ('div' == type) {
 			return div;
 		};
@@ -2133,7 +2316,12 @@ App.prototype.renderItem = function(item, parent, config) {
 		if ('child' == type) {
 			return this.createNewItem(item);
 		};
+		if ('key' == type) { // Key handler
+			return keyHandler(arg0);
+		};
 	}.bind(this);
+	render('Item render');
+	return controller; // Use it for controll
 };
 
 App.prototype.findEl = function(query, where) {
@@ -2332,7 +2520,7 @@ App.prototype.loadApplications = function() {
 
 var AppTmpl = function () {};
 
-AppTmpl.prototype.onRender = function(config, item, div, blocks) {
+AppTmpl.prototype.onRender = function(config, item, controller) {
 	return null;
 };
 
@@ -2436,8 +2624,8 @@ App.prototype.initAppAPI = function() {
 			$$.log('Dev. application not found:', name);
 		}
 	}.bind(this);
-	$$.renderGrid = function (config, div, handler) {
-		return this.renderGrid(config, div, handler);
+	$$.addGrid = function (config, controller, handler) {
+		return controller('add_grid', config, handler);
 	}.bind(this);
 	$$.notifyUpdated = function (item, event) {
 		if (!event) {

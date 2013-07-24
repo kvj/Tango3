@@ -3,7 +3,7 @@ var App = function () {
 
 App.prototype = new $$.appTmpl;
 
-App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
+App.prototype.onRender = function(config, item, controller, saveHandler) {
 	var renderConnection = function (db) {
 		var grid = {
 			id: item.id,
@@ -81,7 +81,7 @@ App.prototype.onRender = function(config, item, div, blocks, saveHandler) {
 					})
 				};
 			};
-			$$.renderGrid(grid, div, function (data, col, text) {
+			$$.addGrid(grid, controller, function (data, col, text) {
 				var _handler = function (err) {
 					// $$.log('Updated', err, item);
 					if (err) {
