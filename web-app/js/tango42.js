@@ -205,6 +205,22 @@ NotepadPanel.prototype.toggleVisible = function() {
 	});
 };
 
+NotepadPanel.prototype.reparent = function(id, parent, handler) { // Reparents
+	this.app.list({id: id}, function(err, data) { // Item found
+		if (err || data.length == 0) { // Failed to found
+			return handler(err || 'Not found');
+		};
+		var item = data[0];
+		this.app.events.emit('remove', {
+			item: item
+		});
+		item.parent = parent.id;
+		this.app.updateItem(item, function(item) { // Updated
+			return handler();
+		});
+	}.bind(this));
+};
+
 NotepadPanel.prototype.refresh = function(handler) {
 	var contentDiv = this.app.findEl('#left_content', this.div);
 	var selectedID = null;
@@ -224,6 +240,16 @@ NotepadPanel.prototype.refresh = function(handler) {
 					item: item
 				});
 			}.bind(this));
+			this.app.enableDrop(div, {
+				'custom/item': function (other) {
+					this.reparent(other.id, item, function(err) { // Updated
+						if (err) { // Failed
+							return this.app.showError(err);
+						};
+					}.bind(this));
+					return false
+				}.bind(this)
+			});
 			this.app.text(div, item.title);
 		}.bind(this);
 		this.app.text(contentDiv);
@@ -481,6 +507,7 @@ NotepadController.prototype.refreshPagesPane = function() {
 					this.showPage(index);
 					this.togglePages();
 				}.bind(this));
+				this.app.enableDrag(div, {'custom/item': {id: item.id}, 'Text': item.id});
 			}.bind(this);
 			var item = this.pages[i];
 			var div = this.app.el('div', this.pagesDiv, {
@@ -2014,18 +2041,9 @@ App.prototype.gridHandler = function(blocks, grid, div, handler) {
 
 App.prototype.renderItem = function(item, parent, config) {
 	var titleDiv = this.findEl('.card_title_text', parent);
-	this.enableDrag(titleDiv, {'custom/item': item, 'Text': '[['+item.id+']]'});
-	this.enableDrop(titleDiv, {
-		'custom/item': function (other) {
-			// $$.log('Dropped:', other);
-			// this.reparent(item, other, function (err) {
-			// 	if (err) {
-			// 		this.showError(err);
-			// 	};
-			// }.bind(this));
-			return false
-		}.bind(this)
-	});
+	if (item.parent != 'root') { // Not first page
+		this.enableDrag(titleDiv, {'custom/item': item, 'Text': '[['+item.id+']]'});
+	};
 	var bodyDiv = this.findEl('.card_body_contents', parent);
 	this.text(bodyDiv);
 	var bottomDiv = this.findEl('.card_tags', parent);
