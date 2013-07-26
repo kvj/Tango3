@@ -236,9 +236,7 @@ NotepadPanel.prototype.refresh = function(handler) {
 				'class': 'left_item card_title_text one_line text'
 			});
 			div.addEventListener('click', function (evt) {
-				this.app.events.emit('select', {
-					item: item
-				});
+				this.app.selectItem(item);
 			}.bind(this));
 			this.app.enableDrop(div, {
 				'custom/item': function (other) {
@@ -1298,41 +1296,51 @@ App.prototype.keyHandler = function() {
 				panel.raisePage(2);
 				return stop();
 			};
-			var passToItem = false;
-			if (code == 37) { // Left
-				e.key = 'left';
-				passToItem = true;
-			};
-			if (code == 39) { // Right
-				e.key = 'right';
-				passToItem = true;
-			};
-			if (code == 38) { // Top
-				e.key = 'up';
-				passToItem = true;
-			};
-			if (code == 40) { // Bottom
-				e.key = 'down';
-				passToItem = true;
-			};
-			if (code == 13) { // Enter
-				e.key = 'enter';
-				passToItem = true;
-			};
-			if (code == 45) { // Insert
-				e.key = 'insert';
-				passToItem = true;
-			};
-			if (code == 46) { // Delete
-				e.key = 'delete';
-				passToItem = true;
-			};
-			if (passToItem) { // Item will process this
+			if (code == 37) e.key = 'left';
+			if (code == 39) e.key = 'right';
+			if (code == 38) e.key = 'up';
+			if (code == 40) e.key = 'down';
+			if (code == 13) e.key = 'enter';
+			if (code == 45) e.key = 'insert';
+			if (code == 46) e.key = 'delete';
+			if (code == 81) e.key = 'q';
+			if (code == 87) e.key = 'w';
+			if (code == 69) e.key = 'e';
+			if (code == 82) e.key = 'r';
+			if (code == 84) e.key = 't';
+			if (code == 89) e.key = 'y';
+			if (code == 85) e.key = 'u';
+			if (code == 73) e.key = 'i';
+			if (code == 79) e.key = 'o';
+			if (code == 80) e.key = 'p';
+			if (code == 65) e.key = 'a';
+			if (code == 83) e.key = 's';
+			if (code == 68) e.key = 'd';
+			if (code == 70) e.key = 'f';
+			if (code == 71) e.key = 'g';
+			if (code == 72) e.key = 'h';
+			if (code == 74) e.key = 'j';
+			if (code == 75) e.key = 'k';
+			if (code == 76) e.key = 'l';
+			if (code == 90) e.key = 'z';
+			if (code == 88) e.key = 'x';
+			if (code == 67) e.key = 'c';
+			if (code == 86) e.key = 'v';
+			if (code == 66) e.key = 'b';
+			if (code == 78) e.key = 'n';
+			if (code == 77) e.key = 'm';
+			if (code == 188) e.key = ',';
+			if (code == 190) e.key = '.';
+			if (code == 191) e.key = '/';
+			if (code == 9) e.key = 'tab';
+			if (code == 8) e.key = 'backspace';
+			// if (code == ) e.key = '';
+			if (e.key) { // Item will process this
 				panel.keyHandler(e);
 				return stop();
 			};
 		} else {
-			if (code == 27) { // Escape - cancel edit
+			if (code == 27 || (e.ctrl && code == 81)) { // Escape or ctrl+Q - cancel edit
 				panel.sendMessage('cancel');
 				return stop();
 			};
@@ -1396,6 +1404,9 @@ App.prototype.enableDrag = function(div, types) {
 };
 
 App.prototype.selectItem = function(item) {
+	this.events.emit('select', {
+		item: item
+	});
 };
 
 App.prototype.createNewItem = function(parent, tags, type) {
@@ -1429,7 +1440,7 @@ App.prototype.createNewItem = function(parent, tags, type) {
 		this.events.emit('add', {
 			item: item
 		});
-		this.selectItem(parent);
+		// this.selectItem(parent);
 	}.bind(this));
 };
 
@@ -1562,7 +1573,6 @@ App.prototype.renderText = function(text, div, handler) {
 		// Link parser
 		var reg = /(.*?)\[\[([#?a-z0-9]+)\]\](.*)/
 		var m = text.match(reg);
-		// $$.log('Checkbox:', text, m);
 		if (!m) {
 			return false;
 		};
@@ -1573,10 +1583,9 @@ App.prototype.renderText = function(text, div, handler) {
 		return true;
 	}.bind(this));
 	parsers.push(function (text, div) {
-		// Link parser
+		// Title parser
 		var reg = /^(!{1,3}) (.+)$/
 		var m = text.match(reg);
-		// $$.log('Checkbox:', text, m);
 		if (!m) {
 			return false;
 		};
@@ -1673,7 +1682,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 					handler({type: type}, col, etext.value);
 					return false;
 				};
-				if (evt.keyCode == 27) {
+				if (evt.keyCode == 27 || (evt.ctrlKey && evt.keyCode == 81)) {
 					// Cancel
 					var value = etext.value;
 					if (originalValue != value && !window.confirm('Discard changes?')) {
@@ -1841,11 +1850,11 @@ App.prototype.renderGrid = function(config, div, handler) {
 				rowControl[cursor.col]('edit');	
 				return;
 			};
-			if (e.key == 'insert') { // Insert
+			if (e.key == 'insert' || e.key == 'i') { // Insert or i
 				rowControl[cursor.col]('add');	
 				return;
 			};
-			if (e.key == 'delete') { // Delete
+			if (e.key == 'delete' || e.key == 'd') { // Delete
 				rowControl[cursor.col]('delete');	
 				return;
 			};
