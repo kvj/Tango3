@@ -620,6 +620,14 @@ NotepadController.prototype.resize = function() {
 	};
 	this.width = 20;
 	this.height = 30;
+	if (this.notepadConfig) { // Have config
+		if (this.notepadConfig.width) { // Have width
+			this.width = this.notepadConfig.width;
+		};
+		if (this.notepadConfig.height) { // Have height
+			this.height = this.notepadConfig.height;
+		};
+	};
 	var plusHeight = 9;
 	var plusWidth = 1;
 	var inEm = this.app.pxInEm(this.parent);
@@ -655,6 +663,10 @@ NotepadController.prototype.load = function(item) {
 			return this.app.showError('Not found');
 		};
 		this.root = data[0];
+		this.app.events.emit('load', {
+			root: this.root,
+			controller: this
+		});
 		this.resize();
 		// Set size of body
 		this.refreshList(function (err, list) {
@@ -721,6 +733,40 @@ NotepadController.prototype.find = function(id) {
 	return -1;
 };
 
+NotepadController.prototype.sort = function(list) { // Sort pages acc. to notepadConfig
+	var sort = '+title';
+	if (this.notepadConfig && this.notepadConfig.sort) { // Have custom sort
+		sort = this.notepadConfig.sort; 
+	};
+	var dir = 1;
+	if (sort.charAt(0) == '-') { // Reverse
+		dir = -1;
+		sort = sort.substr(1);
+	};
+	if (sort.charAt(0) == '+') { // Just ignore
+		sort = sort.substr(1);
+	};
+	list.sort(function(a, b) { // Sort by title/created/updated
+		var v1 = a.created;
+		var v2 = b.created;
+		if (sort == 'title') { // By title
+			v1 = a.title;
+			v2 = b.title;
+		};
+		if (sort == 'updated') { // By updated
+			v1 = a.updated;
+			v2 = b.updated;
+		};
+		if (v1>v2) {
+			return dir;
+		};
+		if (v1<v2) {
+			return -dir;
+		};
+		return 0;
+	});
+};
+
 NotepadController.prototype.refreshList = function(handler) {
 	// Refreshes list of all pages
 	if (!this.root) {
@@ -737,7 +783,8 @@ NotepadController.prototype.refreshList = function(handler) {
 				// Not found
 				return handler();
 			};
-			for (var i = data.length - 1; i >= 0; i--) {
+			this.sort(data);
+			for (var i = 0; i < data.length; i++) { // Create pages
 				var item = data[i];
 				items.push(item);
 			};
@@ -746,7 +793,7 @@ NotepadController.prototype.refreshList = function(handler) {
 			if (this.pagesVisible) {
 				this.refreshPagesPane();
 			};
-			// TODO: Refresh indicator and bookmarks
+			// TODO: Refresh bookmarks
 		}.bind(this));
 	}.bind(this))
 
@@ -1054,9 +1101,9 @@ App.prototype.initUI = function(handler) {
 	this.showInfo('Application loaded');
 	this.leftPanel = new NotepadPanel(this);
 	this.initLog();
-	this.loadApplications();
 	this.keyHandler();
 	this.selectHandler();
+	this.loadApplications();
 	handler();
 };
 
@@ -1646,7 +1693,12 @@ App.prototype.renderGrid = function(config, div, handler) {
 				select();
 				handler({type: 'button'}, col);
 			}.bind(this));
+		} else if (col.select) { // Render dropdown menu
+			var select = this.el('select', wrapper, {
+				'class': 'item_select'
+			});
 		} else {
+			// Other - render as text
 			this.renderText(col.text || '', wrapper, function (type, text) {
 				handler(type, col, text);
 			});
@@ -2004,7 +2056,10 @@ App.prototype.parseLines = function(text, handler) {
 	if (block) {
 		blocks.push(block);
 	};
-	return handler(blocks);
+	if (handler) { // Have handler - call
+		handler(blocks);
+	};
+	return blocks; // For those who doesn't use handler
 };
 
 App.prototype.gridHandler = function(blocks, grid, div, handler) {
@@ -2194,7 +2249,7 @@ App.prototype.renderItem = function(item, parent, config) {
 					}.bind(this));
 				}.bind(this);
 				// $$.log('Render', item.title, editHandlers.length, configs.length);
-				this.text(bodyDiv);
+				this.text(bodyDiv); // Clear body
 				editHandlers = [];
 				for (var i = 0; i < configs.length; i++) {
 					var conf = configs[i];
@@ -2258,14 +2313,7 @@ App.prototype.renderItem = function(item, parent, config) {
 		form.set('body', item.body);
 		form.set('title', item.title);
 		form.set('tags', item.tags? item.tags.join(' '): '');
-
 		ebody.focus();
-		// var save = this.el('button', ebuttons, {
-		// 	'class': 'item_button'
-		// }, 'Save');
-		// save.addEventListener('click', function (evt) {
-		// 	onSave();
-		// });
 	}.bind(this);
 	var onUpdate = function (evt) {
 		if (evt.item && evt.item.id == item.id) {
@@ -2551,14 +2599,23 @@ AppTmpl.prototype.onRender = function(config, item, controller) {
 	return null;
 };
 
-AppTmpl.prototype.getBlock = function(blocks, name) {
+AppTmpl.prototype.getBlock = function(blocks, name, create) {
 	for (var i = 0; i < blocks.length; i++) {
 		var b = blocks[i];
 		if (b.type == 'block' && b.params.length>0 && b.params[0] == name) {
 			return b;
 		};
 	};
+	if (create) { // Create empty
+		var block = {lines: [], params: [name], type: 'block'};
+		blocks.push(block);
+		return block;
+	};
 	return null;
+};
+
+AppTmpl.prototype.parseLines = function(text, handler) { // Converts text to array of blocks
+	return this.app.parseLines(text, handler);
 };
 
 AppTmpl.prototype.blockToConfig = function(block) {
@@ -2640,6 +2697,7 @@ App.prototype.initAppAPI = function() {
 	$$.appTmpl = AppTmpl;
 	$$.registerApplication = function (appID, instance) {
 		this.apps[appID] = instance;
+		instance.app = this;
 		$$.log('Application registered:', appID);
 	}.bind(this);
 	$$.showError = this.showError.bind(this);
@@ -2700,4 +2758,8 @@ App.prototype.initAppAPI = function() {
 		return this.manager.removeToken(db.conn, token, handler);
 	}.bind(this);
 	$$.addSoftSpace = this.addSoftSpace.bind(this);
+	$$.appEvents = function() { // Returns events of app
+		return this.events;
+	}.bind(this);
 };
+

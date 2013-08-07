@@ -14,7 +14,7 @@
 		"network": ["*"]
 	},
 	"note": {
-		"version": 1307271335,
+		"version": 1308072314,
 		"index": "index.tmpl.html",
 		"main": "tango42.tmpl.html",
 		"cache": [
