@@ -487,7 +487,7 @@ NotepadController.prototype.sendMessage = function(message) {
 };
 
 NotepadController.prototype.keyHandler = function(e) { // Key handler
-	this.visible[0]('key', e);
+	return this.visible[0]('key', e);
 };
 
 NotepadController.prototype.createNewItem = function() {
@@ -1318,8 +1318,10 @@ App.prototype.keyHandler = function() {
 			if (code == 8) e.key = 'backspace';
 			// if (code == ) e.key = '';
 			if (e.key) { // Item will process this
-				panel.keyHandler(e);
-				return stop();
+				var keyHandlerResult = panel.keyHandler(e);
+				if (false == keyHandlerResult) { // Key handled
+					return stop();
+				};
 			};
 		} else {
 			if (code == 27 || (e.ctrl && code == 81)) { // Escape or ctrl+Q - cancel edit
@@ -1835,15 +1837,15 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (rowControl && rowControl[cursor.col]) { // Cursor is valid - can do operations
 			if (e.key == 'enter') { // Edit
 				rowControl[cursor.col]('edit');	
-				return;
+				return true;
 			};
 			if (e.key == 'insert' || e.key == 'i') { // Insert or i
 				rowControl[cursor.col]('add');	
-				return;
+				return true;
 			};
 			if (e.key == 'delete' || e.key == 'd') { // Delete
 				rowControl[cursor.col]('delete');	
-				return;
+				return true; // Means key handled
 			};
 		};
 		if (cursor.row == -1) { // Last row
@@ -1858,10 +1860,13 @@ App.prototype.renderGrid = function(config, div, handler) {
 		if (e.key == 'down' && cursor.row == gridControl.length - 1) { // Bottom row and down
 			return false;
 		};
+		var keyResult = null;
 		if (e.key == 'up') { // row--
+			keyResult = true;
 			cursor.row--;
 		};
 		if (e.key == 'down') { // row++
+			keyResult = true;
 			cursor.row++;
 		};
 		rowControl = gridControl[cursor.row];
@@ -1872,6 +1877,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			cursor.col = 0;
 		};
 		if (e.key == 'left') { // Left
+			keyResult = true;
 			if (cursor.col>0) { // --
 				cursor.col--;
 			} else { // To right
@@ -1879,6 +1885,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 			};
 		};
 		if (e.key == 'right') { // Right
+			keyResult = true;
 			if (cursor.col<rowControl.length-1) { // ++
 				cursor.col++;
 			} else { // To left
@@ -1887,6 +1894,7 @@ App.prototype.renderGrid = function(config, div, handler) {
 		};
 		// $$.log('rowControl', rowControl[cursor.col], e.key, rowControl, cursor);
 		rowControl[cursor.col]('select');
+		return keyResult;
 	};
 	var controller = function (message, arg0, arg1) {
 		// $$.log('Grid key', message, arg0, arg1);
@@ -2111,7 +2119,10 @@ App.prototype.renderItem = function(item, parent, config) {
 			};
 			if (!gridOK()) { // Invalid grid
 			};
-			editHandlers[cursor.grid]('key', e, cursor);
+			keyResult = editHandlers[cursor.grid]('key', e, cursor);
+		};
+		if (true == keyResult) { // Key handled
+			return false;
 		};
 	};
 	var inState = function (state) {
